@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — THE LEDGER
+   GAMBLER'S FORTUNE — THE LEDGER
    Permanent meta progression: profile, XP and levels, vault
    tokens, unlockable themes/skins/dice/cards, perks, prestige
    tiers, achievements, per-run contracts and random events.
@@ -131,7 +131,7 @@ function saveProfile() {
     profile.level = levelFromXp(profile.xp);
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch (err) {
-    console.warn("Pixel Fortune could not save your profile:", err);
+    console.warn("Gambler's Fortune could not save your profile:", err);
   }
 }
 

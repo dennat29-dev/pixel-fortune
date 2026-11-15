@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — startup, action routing, keyboard and debug API
+   GAMBLER'S FORTUNE — startup, action routing, keyboard and debug API
    ============================================================ */
 
 const ACTIONS = {

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # ============================================================
-#  PIXEL FORTUNE — public share launcher
+#  GAMBLER'S FORTUNE — public share launcher
 #
 #  Double-click this file to start the game and publish it to a
 #  public https link you can send to anyone on the internet.
@@ -21,7 +21,7 @@ TUNNEL_PID=""
 
 cleanup() {
   echo ""
-  echo "• Shutting down Pixel Fortune's public link..."
+  echo "• Shutting down Gambler's Fortune's public link..."
   [ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null
   [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null
   rm -f "$LOG" 2>/dev/null
@@ -104,7 +104,7 @@ printf '%s\n' "$PUBLIC_URL" > .share-url.txt
 
 echo ""
 echo "============================================================"
-echo "   PIXEL FORTUNE IS LIVE"
+echo "   GAMBLER'S FORTUNE IS LIVE"
 echo ""
 echo "   $PUBLIC_URL"
 echo ""

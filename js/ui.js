@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — UI rendering, navigation and economy flows
+   GAMBLER'S FORTUNE — UI rendering, navigation and economy flows
    ============================================================ */
 
 /* ------------------------------------------------------------
@@ -334,7 +334,7 @@ function renderLobby() {
 
   return `<div class="screen">
     <section class="hero-panel">
-      <span class="eyebrow">PIXEL FORTUNE // FLOOR 08 // OPEN ALL NIGHT</span>
+      <span class="eyebrow">GAMBLER'S FORTUNE // FLOOR 08 // OPEN ALL NIGHT</span>
       <h1 class="hero-title">EIGHT CABINETS.<br>ONE BAD NIGHT.</h1>
       <p class="hero-copy">You have <b>${fmt(state.cash)}</b> and <b>${state.energy}/${maxEnergy()}</b> energy. The sharks want their money by <b>Day ${next ? next.dueDay : "—"}</b>. Play smart, sleep cheap, and don't go broke.</p>
       <div class="hero-actions">
@@ -380,7 +380,7 @@ function renderLobby() {
     <div class="lore-panel">
       <div class="lore-copy">
         <span class="eyebrow">THE LEDGER // YOUR PERMANENT RECORD</span>
-        <p>Nobody starts at Pixel Fortune. You <b>arrive</b> — broke, curious, and holding a marker you cannot read. The sharks up front take your cash. The man in the back takes your nerve. But every loss teaches the house something about you, and that knowledge is the only thing that <b>carries over</b>.</p>
+        <p>Nobody starts at Gambler's Fortune. You <b>arrive</b> — broke, curious, and holding a marker you cannot read. The sharks up front take your cash. The man in the back takes your nerve. But every loss teaches the house something about you, and that knowledge is the only thing that <b>carries over</b>.</p>
         <p>Bank tokens, climb the vault, and the floor starts bending your way — a warmer bed, a luckier charm, a gilded payout. Walk out of the back room enough times and they stop calling you a debtor. They start calling you <b>${tier.name.toLowerCase()}</b>.</p>
       </div>
       <div class="lore-meta">
@@ -822,7 +822,7 @@ function closeModal() {
 
 function showHelp() {
   openModal(`<h2>HOW TO SURVIVE</h2>
-    <p>Pixel Fortune runs on <b>virtual currency only</b>. Every game costs energy. Every morning a new debt bill lands, and every bill comes due five days later.</p>
+    <p>Gambler's Fortune runs on <b>virtual currency only</b>. Every game costs energy. Every morning a new debt bill lands, and every bill comes due five days later.</p>
     <div class="help-grid">
       <div class="help-item"><b>ENERGY</b>Each play burns energy. Run dry and you must sleep.</div>
       <div class="help-item"><b>DEBT</b>Bills appear each new day. Miss one on its due day and the run ends.</div>
@@ -843,7 +843,7 @@ function showIntro() {
   if (!profile || profile.seenIntro) return;
   profile.seenIntro = true;
   saveProfile();
-  openModal(`<h2>WELCOME TO PIXEL FORTUNE</h2>
+  openModal(`<h2>WELCOME TO GAMBLER'S FORTUNE</h2>
     <p>A neon arcade casino with <b>virtual currency only</b>. You start with a little cash, a lot of energy, and a ledger that follows you everywhere.</p>
     <div class="help-grid">
       <div class="help-item"><b>THE FLOOR</b>Eight cabinets. Each play burns energy and pays out — or does not.</div>

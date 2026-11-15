@@ -5,12 +5,12 @@ PORT=8123
 URL="http://127.0.0.1:$PORT/index.html"
 
 if lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Pixel Fortune is already running at $URL"
+  echo "Gambler's Fortune is already running at $URL"
   open "$URL"
   exit 0
 fi
 
-echo "Starting Pixel Fortune at $URL"
+echo "Starting Gambler's Fortune at $URL"
 echo "Press Ctrl+C to stop the server."
 echo
 

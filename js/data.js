@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — data, sprites and small utilities
+   GAMBLER'S FORTUNE — data, sprites and small utilities
    ============================================================ */
 
 const SAVE_KEY = "pixelFortune_save_v1";

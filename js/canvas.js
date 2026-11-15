@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — canvas games (roulette, plinko, horse racing)
+   GAMBLER'S FORTUNE — canvas games (roulette, plinko, horse racing)
    ============================================================ */
 
 function prepCanvas(canvas, width, height) {

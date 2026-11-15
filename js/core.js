@@ -1,5 +1,5 @@
 /* ============================================================
-   PIXEL FORTUNE — core state, persistence, audio and economy
+   GAMBLER'S FORTUNE — core state, persistence, audio and economy
    ============================================================ */
 
 let state = null;
@@ -221,7 +221,7 @@ function saveState() {
   } catch (err) {
     if (!saveFailureNotified) {
       saveFailureNotified = true;
-      console.warn("Pixel Fortune could not save progress:", err);
+      console.warn("Gambler's Fortune could not save progress:", err);
     }
   }
 }
@@ -340,7 +340,7 @@ function loadState() {
 
     return s;
   } catch (err) {
-    console.warn("Pixel Fortune save was corrupted. Starting a new run.", err);
+    console.warn("Gambler's Fortune save was corrupted. Starting a new run.", err);
     return makeState();
   }
 }
