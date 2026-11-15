@@ -1,0 +1,8 @@
+# OS noise
+.DS_Store
+
+# Launcher scratch output
+.share-url.txt
+
+# Local tunnel client (never commit binaries)
+.tools/
