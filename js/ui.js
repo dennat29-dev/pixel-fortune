@@ -96,6 +96,35 @@ function renderHUD() {
         : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to open the back room.`;
     prestigeMini.innerHTML = `<b>PRESTIGE ★ ${stars}</b>${blurb}`;
   }
+
+  const vaultSub = $("#vaultSub");
+  if (vaultSub && profile) vaultSub.textContent = `${tokensLabel(profile.tokens)} • ${unlockedCount()}/${totalVaultItems()} owned`;
+  const trophiesSub = $("#trophiesSub");
+  if (trophiesSub && profile) {
+    const a = achievementStats();
+    trophiesSub.textContent = `${a.unlocked}/${a.total} • ${tierFor(totalStars()).name}`;
+  }
+
+  renderProfileChip();
+}
+
+function renderProfileChip() {
+  const chip = $("#profileChip");
+  if (!chip || !profile) return;
+  const prog = levelProgress();
+  const tier = tierFor(totalStars());
+  const next = nextTierFor(totalStars());
+  chip.innerHTML = `
+    <span class="pc-avatar">${avatarSVG(profile.equipped?.skin)}</span>
+    <span class="pc-copy">
+      <span class="pc-top"><b>LV ${prog.level}</b><span class="pc-tier" style="color:${tier.color}">${tier.name}</span></span>
+      <span class="pc-bar"><i style="width:${Math.round(prog.pct * 100)}%"></i></span>
+      <span class="pc-bottom"><span class="pc-tokens">${tokensLabel(profile.tokens)}</span><span class="pc-stars">★ ${totalStars()}</span></span>
+    </span>`;
+  chip.title = next
+    ? `${tier.name} • ${prog.into}/${prog.span} XP to LV ${prog.level + 1} • ${next.stars - totalStars()}★ to ${next.name}`
+    : `${tier.name} • top tier reached`;
+  chip.setAttribute("aria-label", `Profile level ${prog.level}, ${profile.tokens} tokens`);
 }
 
 function renderNav() {
@@ -145,6 +174,7 @@ function renderRightRail() {
   const hustlePanel = $("#hustlePanel");
   const sleepPanel = $("#sleepPanel");
   const logPanel = $("#logPanel");
+  const challengePanel = $("#challengePanel");
   if (!debtPanel || !hustlePanel || !sleepPanel || !logPanel) return;
 
   const debts = state.debts.slice().sort((a, b) => a.dueDay - b.dueDay);
@@ -202,6 +232,32 @@ function renderRightRail() {
       </div>`).join("") : `<div class="log-entry"><span class="day-tag">—</span><span>Nothing on the floor yet.</span></div>`}
     </div>
   </div>`;
+
+  if (challengePanel) {
+    const chs = Array.isArray(state.challenges) ? state.challenges : [];
+    const effects = (typeof activeEffects === "function") ? activeEffects() : [];
+    const doneCount = chs.filter(c => c.done).length;
+    challengePanel.innerHTML = `<div class="panel challenge-panel">
+      <div class="panel-head"><b>RUN CONTRACTS</b><span class="tag">${doneCount}/${chs.length}</span></div>
+      <div class="challenge-list">
+        ${chs.length ? chs.map(ch => {
+          const contract = (typeof contractById === "function") ? contractById(ch.id) : null;
+          if (!contract) return "";
+          const prog = ch.done ? null : challengeProgress(ch);
+          return `<div class="challenge ${ch.done ? "done" : ""}">
+            <span class="challenge-icon">${sprite(contract.icon)}</span>
+            <div class="challenge-copy">
+              <div class="challenge-name">${contract.name}</div>
+              <div class="challenge-desc">${contract.desc}</div>
+              ${prog ? `<div class="challenge-bar"><i style="width:${clamp((prog.have / prog.need) * 100, 0, 100)}%"></i></div><div class="challenge-prog">${prog.text}</div>` : `<div class="challenge-prog">COMPLETE — reward paid</div>`}
+            </div>
+            <span class="challenge-reward">${ch.done ? "✓" : `+${contract.reward.tokens}◆`}</span>
+          </div>`;
+        }).join("") : `<div class="challenge-empty">No contracts this run. Start a new run to draw three.</div>`}
+      </div>
+      ${effects.length ? `<div class="effect-strip">${effects.map(e => `<span class="effect-chip" title="${e.name}">${sprite(e.icon)}<span>${e.name}</span></span>`).join("")}</div>` : ""}
+    </div>`;
+  }
 }
 
 function renderAll() {
@@ -224,6 +280,8 @@ function renderStage() {
   if (!stage) return;
   let html = "";
   if (ui.view === "shop") html = renderShop();
+  else if (ui.view === "vault") html = renderVault();
+  else if (ui.view === "trophies") html = renderTrophies();
   else if (ui.view === "backroom") html = renderBackroom();
   else if (ui.view === "game" && ui.game) html = renderGameScreen(ui.game);
   else html = renderLobby();
@@ -269,6 +327,10 @@ function renderLobby() {
   const played = stats.played || 0;
   const rate = played ? Math.round((stats.wins / played) * 100) : 0;
   const dueText = due.length ? "TODAY" : next ? `${Math.max(0, next.dueDay - state.day)} DAY${next.dueDay - state.day === 1 ? "" : "S"}` : "NONE";
+  const prog = levelProgress();
+  const tier = tierFor(totalStars());
+  const nextTier = nextTierFor(totalStars());
+  const achievements = achievementStats();
 
   return `<div class="screen">
     <section class="hero-panel">
@@ -278,12 +340,14 @@ function renderLobby() {
       <div class="hero-actions">
         <button class="btn btn-gold btn-lg" data-action="quick-play">QUICK PLAY</button>
         <button class="btn btn-dark" data-action="go-shop">UPGRADE DEN</button>
+        <button class="btn btn-cyan" data-action="go-vault">THE VAULT</button>
         <button class="btn btn-purple" data-action="go-backroom">BACK ROOM</button>
       </div>
       <div class="hero-chips">
         <span class="hero-chip">NEXT BILL <b>${next ? fmt(next.amount) : "$0"}</b></span>
         <span class="hero-chip ${due.length ? "warn" : ""}">DUE IN <b>${dueText}</b></span>
         <span class="hero-chip">WIN RATE <b>${rate}%</b></span>
+        <span class="hero-chip">TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
         <span class="hero-chip">STARS <b>${state.prestige.stars || 0}</b></span>
       </div>
     </section>
@@ -311,6 +375,27 @@ function renderLobby() {
       <div class="survival-item ${due.length ? "hot" : ""}"><b>SHARK WATCH</b>${due.length ? `${due.length} bill${due.length === 1 ? "" : "s"} due today. Pay up or the run ends.` : next ? `Next bill is due Day ${next.dueDay} (${fmt(next.amount)}).` : "No bills. Something is wrong."}</div>
       <div class="survival-item"><b>ENERGY</b>${state.energy}/${maxEnergy()} left. Every play burns energy. Sleep to reset, but a new bill arrives.</div>
       <div class="survival-item"><b>PRESTIGE</b>${state.prestigeUnlocked ? "The back room is open. Cash out Russian roulette to keep permanent stars." : state.offerExpired ? "This run's back-room offer expired. Try again next run." : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY}.`}</div>
+    </div>
+
+    <div class="lore-panel">
+      <div class="lore-copy">
+        <span class="eyebrow">THE LEDGER // YOUR PERMANENT RECORD</span>
+        <p>Nobody starts at Pixel Fortune. You <b>arrive</b> — broke, curious, and holding a marker you cannot read. The sharks up front take your cash. The man in the back takes your nerve. But every loss teaches the house something about you, and that knowledge is the only thing that <b>carries over</b>.</p>
+        <p>Bank tokens, climb the vault, and the floor starts bending your way — a warmer bed, a luckier charm, a gilded payout. Walk out of the back room enough times and they stop calling you a debtor. They start calling you <b>${tier.name.toLowerCase()}</b>.</p>
+      </div>
+      <div class="lore-meta">
+        <div class="lore-meta-row"><span>PROFILE LEVEL</span><b>LV ${prog.level}</b></div>
+        <div class="lore-xp"><i style="width:${Math.round(prog.pct * 100)}%"></i></div>
+        <div class="lore-meta-row"><span>XP TO NEXT</span><b>${prog.remaining}</b></div>
+        <div class="lore-meta-row"><span>TOKENS</span><b>${tokensLabel(profile.tokens)}</b></div>
+        <div class="lore-meta-row"><span>PRESTIGE TIER</span><b style="color:${tier.color}">${tier.name}</b></div>
+        <div class="lore-meta-row"><span>STARS / NEXT</span><b>★ ${totalStars()}${nextTier ? ` / ${nextTier.stars}` : ""}</b></div>
+        <div class="lore-meta-row"><span>ACHIEVEMENTS</span><b>${achievements.unlocked}/${achievements.total}</b></div>
+        <div class="lore-actions">
+          <button class="btn btn-cyan btn-sm" data-action="go-vault">OPEN VAULT</button>
+          <button class="btn btn-dark btn-sm" data-action="go-trophies">TROPHIES</button>
+        </div>
+      </div>
     </div>
   </div>`;
 }
@@ -374,6 +459,167 @@ function buyUpgrade(key) {
   toast(`${up.name} → LV ${level + 1}`, "gold");
   saveState();
   renderAll();
+}
+
+/* ------------------------------------------------------------
+   The Vault — permanent unlocks bought with tokens
+   ------------------------------------------------------------ */
+function vaultCard(kind, item) {
+  const owned = isUnlocked(kind, item.id);
+  const equipped = profile.equipped?.[kind] === item.id;
+  const reqOk = reqMet(item);
+  const affordable = profile.tokens >= item.cost;
+  let preview;
+  if (kind === "theme") {
+    const c = item.colors || { "--bg": "#14172b", "--panel": "#222746", "--gold": "#ffcf4a", "--purple": "#b16cff", "--cyan": "#5de8ff" };
+    preview = `<span class="vault-swatch">${["--bg", "--panel", "--gold", "--purple", "--cyan"].map(k => `<i style="background:${c[k]}"></i>`).join("")}</span>`;
+  } else if (kind === "skin") {
+    preview = `<span class="vault-avatar">${avatarSVG(item.id)}</span>`;
+  } else if (kind === "dice") {
+    preview = `<span class="vault-die" data-dice="${item.id}"><i></i><i></i><i></i><i></i><i></i></span>`;
+  } else {
+    preview = `<span class="vault-card-preview" data-cards="${item.id}"><i>A</i></span>`;
+  }
+
+  let action;
+  if (owned && equipped) action = `<span class="vault-state on">EQUIPPED</span>`;
+  else if (owned) action = `<button class="btn btn-green btn-sm" data-action="equip-item" data-kind="${kind}" data-id="${item.id}">EQUIP</button>`;
+  else if (!reqOk) action = `<span class="vault-state locked">${reqText(item)}</span>`;
+  else action = `<button class="btn btn-gold btn-sm" data-action="buy-unlock" data-kind="${kind}" data-id="${item.id}" ${affordable ? "" : "disabled"}>${item.cost} ◆</button>`;
+
+  return `<div class="vault-card ${owned ? "owned" : ""} ${equipped ? "equipped" : ""}">
+    <div class="vault-preview">${preview}</div>
+    <div class="vault-name">${item.name}</div>
+    <div class="vault-desc">${item.desc}</div>
+    <div class="vault-action">${action}</div>
+  </div>`;
+}
+
+function perkCard(key, perk) {
+  const level = perkLevel(key);
+  const maxed = level >= perk.max;
+  const cost = maxed ? null : perk.costs[level];
+  const affordable = cost !== null && profile.tokens >= cost;
+  return `<div class="vault-card perk ${maxed ? "owned" : ""}">
+    <div class="vault-preview"><span class="perk-icon">${sprite(perk.icon)}</span></div>
+    <div class="vault-name">${perk.name} <span class="muted">LV ${level}/${perk.max}</span></div>
+    <div class="vault-desc">${perk.desc}</div>
+    <div class="upgrade-effect">NOW: ${level > 0 ? perk.effect(level) : "No bonus yet"}<br>NEXT: ${maxed ? "MAXED OUT" : perk.effect(level + 1)}</div>
+    <div class="level-pips">${Array.from({ length: perk.max }, (_, i) => `<span class="level-pip ${i < level ? "on" : ""}"></span>`).join("")}</div>
+    <div class="vault-action">${maxed
+      ? `<span class="vault-state on">MAXED</span>`
+      : `<button class="btn btn-gold btn-sm" data-action="buy-perk" data-perk="${key}" ${affordable ? "" : "disabled"}>${cost} ◆</button>`}</div>
+  </div>`;
+}
+
+function renderVault() {
+  if (!profile) return `<div class="screen narrow"><p>Profile unavailable.</p></div>`;
+  const prog = levelProgress();
+  const tier = tierFor(totalStars());
+  const sections = [
+    { kind: "theme", label: "CASINO THEMES", blurb: "Change the whole room." },
+    { kind: "skin", label: "CHARACTER SKINS", blurb: "Who the sharks see." },
+    { kind: "dice", label: "DICE DESIGNS", blurb: "Same odds, better bones." },
+    { kind: "cards", label: "CARD DESIGNS", blurb: "Style on the felt." }
+  ].map(({ kind, label, blurb }) => {
+    const items = vaultList(kind);
+    const owned = items.filter(i => isUnlocked(kind, i.id)).length;
+    return `<section class="vault-section">
+      <div class="section-head"><h2>${label}</h2><span>${owned}/${items.length} owned • ${blurb}</span></div>
+      <div class="vault-grid">${items.map(i => vaultCard(kind, i)).join("")}</div>
+    </section>`;
+  }).join("");
+
+  return `<div class="screen narrow vault-screen">
+    <div class="vault-head">
+      <div>
+        <span class="eyebrow">THE VAULT // PERMANENT COLLECTION</span>
+        <h1 class="hero-title" style="font-size:clamp(16px,2vw,26px)">SPEND WHAT YOU KEEP</h1>
+      </div>
+      <div class="vault-balance">
+        <span>TOKENS</span><b>${tokensLabel(profile.tokens)}</b>
+        <span class="vault-sub">LV ${prog.level} • ${prog.into}/${prog.span} XP • ★ ${totalStars()}</span>
+      </div>
+    </div>
+    <p class="vault-note">Tokens are permanent. Earn them by leveling up, completing run contracts, cashing out prestige stars, and unlocking achievements. Everything here carries between runs.</p>
+    ${sections}
+    <section class="vault-section">
+      <div class="section-head"><h2>PERMANENT PERKS</h2><span>Bend the rules forever</span></div>
+      <div class="vault-grid perks">${Object.entries(PERKS).map(([key, perk]) => perkCard(key, perk)).join("")}</div>
+    </section>
+    <div class="shop-actions">
+      <button class="btn btn-dark" data-action="go-lobby">← BACK TO FLOOR</button>
+      <button class="btn btn-purple" data-action="go-trophies">TROPHIES</button>
+      <span>Prestige tier: <b style="color:${tier.color}">${tier.name}</b></span>
+    </div>
+  </div>`;
+}
+
+/* ------------------------------------------------------------
+   Trophies — achievements and the prestige ladder
+   ------------------------------------------------------------ */
+function renderTrophies() {
+  if (!profile) return `<div class="screen narrow"><p>Profile unavailable.</p></div>`;
+  const lt = lifetimeStats();
+  const tier = tierFor(totalStars());
+  const next = nextTierFor(totalStars());
+  const stats = achievementStats();
+
+  const ladder = tierLadder().map(t => {
+    const reached = totalStars() >= t.stars;
+    const current = t.id === tier.id;
+    return `<div class="tier-rung ${reached ? "reached" : ""} ${current ? "current" : ""}" style="--tier:${t.color}">
+      <span class="tier-badge">${reached ? "★" : "☆"}</span>
+      <div class="tier-copy"><b>${t.name}</b><small>${t.stars}★ — ${t.blurb}</small></div>
+    </div>`;
+  }).join("");
+
+  const ach = achievementList().map(a => {
+    const got = !!profile.achievements[a.id];
+    return `<div class="ach-card ${got ? "got" : ""}">
+      <span class="ach-icon">${sprite(a.icon)}</span>
+      <div class="ach-copy">
+        <div class="ach-name">${a.name}</div>
+        <div class="ach-desc">${a.desc}</div>
+        <div class="ach-reward">${got ? "UNLOCKED" : `+${a.reward.tokens} ◆ • +${a.reward.xp} XP`}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="screen narrow trophies-screen">
+    <div class="vault-head">
+      <div>
+        <span class="eyebrow">TROPHY ROOM // PERMANENT RECORD</span>
+        <h1 class="hero-title" style="font-size:clamp(16px,2vw,26px)">THE LEDGER REMEMBERS</h1>
+      </div>
+      <div class="vault-balance">
+        <span>ACHIEVEMENTS</span><b>${stats.unlocked} / ${stats.total}</b>
+        <span class="vault-sub">★ ${totalStars()} • ${tier.name}${next ? ` • ${next.stars - totalStars()}★ to ${next.name}` : ""}</span>
+      </div>
+    </div>
+    <div class="trophy-summary">
+      <div class="trophy-stat"><span>RUNS</span><b>${profile.runs || 0}</b></div>
+      <div class="trophy-stat"><span>GAMES</span><b>${lt.gamesPlayed}</b></div>
+      <div class="trophy-stat"><span>WINS</span><b>${lt.wins}</b></div>
+      <div class="trophy-stat"><span>BIGGEST WIN</span><b>${fmt(lt.biggestWin)}</b></div>
+      <div class="trophy-stat"><span>BEST DAY</span><b>${lt.bestDay}</b></div>
+      <div class="trophy-stat"><span>PRESTIGES</span><b>${lt.prestiges}</b></div>
+      <div class="trophy-stat"><span>BEST STREAK</span><b>${lt.maxStreak}</b></div>
+      <div class="trophy-stat"><span>CONTRACTS</span><b>${lt.contractsDone}</b></div>
+    </div>
+    <section class="vault-section">
+      <div class="section-head"><h2>PRESTIGE LADDER</h2><span>Stars are forever</span></div>
+      <div class="tier-ladder">${ladder}</div>
+    </section>
+    <section class="vault-section">
+      <div class="section-head"><h2>ACHIEVEMENTS</h2><span>${stats.unlocked} / ${stats.total} unlocked</span></div>
+      <div class="ach-grid">${ach}</div>
+    </section>
+    <div class="shop-actions">
+      <button class="btn btn-dark" data-action="go-lobby">← BACK TO FLOOR</button>
+      <button class="btn btn-cyan" data-action="go-vault">THE VAULT</button>
+    </div>
+  </div>`;
 }
 
 /* ------------------------------------------------------------
@@ -504,7 +750,7 @@ function renderBetConsole(gameId) {
   const disabled = locked || state.energy < game.energy || state.cash < bet;
   const maxed = bet >= state.cash;
   const atMin = bet <= game.minBet;
-  const bonus = payoutBonusPercent();
+  const bonus = (typeof payoutBonusPercentFor === "function") ? payoutBonusPercentFor(gameId) : payoutBonusPercent();
 
   return `<div class="bet-console">
     <div>
@@ -584,10 +830,31 @@ function showHelp() {
       <div class="help-item"><b>SLEEP</b>Restores energy and advances the day. A new bill arrives.</div>
       <div class="help-item"><b>BANKRUPT</b>Hit zero cash and the run is over. Start a new one.</div>
       <div class="help-item"><b>PRESTIGE</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock the back room.</div>
+      <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
+      <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
+      <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
       <div class="help-item"><b>SOUND</b>Use the ♫ and ♪ buttons up top to toggle music and effects.</div>
     </div>
     <p>Wins return your stake plus profit. Losses take the stake. The odds are sharp, but cold streaks end.</p>
     <div class="modal-actions"><button class="btn btn-gold" data-action="close-modal">GOT IT</button></div>`);
+}
+
+function showIntro() {
+  if (!profile || profile.seenIntro) return;
+  profile.seenIntro = true;
+  saveProfile();
+  openModal(`<h2>WELCOME TO PIXEL FORTUNE</h2>
+    <p>A neon arcade casino with <b>virtual currency only</b>. You start with a little cash, a lot of energy, and a ledger that follows you everywhere.</p>
+    <div class="help-grid">
+      <div class="help-item"><b>THE FLOOR</b>Eight cabinets. Each play burns energy and pays out — or does not.</div>
+      <div class="help-item"><b>THE SHARKS</b>A new bill lands every morning and comes due in five days. Miss one and the run ends.</div>
+      <div class="help-item"><b>THE BACK ROOM</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock Russian roulette and permanent stars.</div>
+      <div class="help-item"><b>THE VAULT</b>Level up and bank tokens to unlock themes, skins, dice, cards and permanent perks.</div>
+      <div class="help-item"><b>CONTRACTS</b>Every run draws three random contracts. Complete them for tokens and XP.</div>
+      <div class="help-item"><b>THE LEDGER</b>Stars, tokens, achievements and every unlock carry into your next run.</div>
+    </div>
+    <p>Nothing here is real money. The regret is real. Good luck.</p>
+    <div class="modal-actions"><button class="btn btn-gold" data-action="close-modal">DEAL ME IN</button></div>`, "intro-modal");
 }
 
 function flashScreen() {
@@ -641,17 +908,26 @@ async function doSleep() {
   state.energy = maxEnergy();
   const missed = state.debts.filter(note => note.dueDay < state.day);
   updatePrestigeExpiry();
+  if (typeof pruneEffects === "function") pruneEffects(state);
   issueDebtFor(state, state.day);
+  const morningEvent = (typeof rollMorningEvent === "function") ? rollMorningEvent(state) : null;
+  let eventDetail = "";
+  if (morningEvent && typeof applyMorningEvent === "function") eventDetail = applyMorningEvent(morningEvent, state) || "";
+  if (typeof metaOnSleep === "function") metaOnSleep();
   addLog(`Day ${state.day}. Energy restored to ${maxEnergy()}. New bill issued.`, "gold");
 
   const title = $("#sleepTitle");
   const sub = $("#sleepSub");
   const banner = $("#sleepDay");
   if (title) title.textContent = `DAY ${state.day}`;
-  if (sub) sub.textContent = "The shutters roll up. The floor smells like ozone and bad decisions.";
-  if (banner) banner.textContent = `ENERGY ${state.energy} / ${maxEnergy()} • NEW BILL ISSUED`;
+  if (sub) sub.textContent = morningEvent
+    ? `${morningEvent.name}: ${eventDetail}`
+    : "The shutters roll up. The floor smells like ozone and bad decisions.";
+  if (banner) banner.textContent = morningEvent
+    ? `MORNING EVENT • ${morningEvent.name.toUpperCase()}`
+    : `ENERGY ${state.energy} / ${maxEnergy()} • NEW BILL ISSUED`;
   overlay.classList.add("morning");
-  sfx("coin");
+  sfx(morningEvent ? "upgrade" : "coin");
   saveState();
   renderAll();
 
@@ -670,6 +946,7 @@ async function doSleep() {
   }
 
   toast(`Day ${state.day}. New bill in the ledger.`, "info");
+  if (morningEvent) toast(`${morningEvent.name} — ${eventDetail}`, "gold");
   checkPrestigeUnlock();
 }
 
@@ -718,6 +995,7 @@ function payDebt(id) {
   sfx("coin");
   toast(`Bill paid — ${fmt(note.amount)}`, "good");
   state.stats.bestCash = Math.max(state.stats.bestCash, state.cash);
+  if (typeof metaOnPayDebt === "function") metaOnPayDebt(note.amount, false);
   saveState();
   renderAll();
   checkPrestigeUnlock();
@@ -735,6 +1013,7 @@ function payAllDebts() {
   floatCash(-total);
   sfx("coin");
   toast(`Ledger cleared — ${fmt(total)}`, "gold");
+  if (typeof metaOnPayDebt === "function") metaOnPayDebt(total, true);
   saveState();
   renderAll();
   checkPrestigeUnlock();
@@ -745,15 +1024,17 @@ function doHustle() {
   if (state.sideHustleDay === state.day) { toast("You already worked today.", "bad"); return; }
   if (state.energy < 1) { toast("No energy left. Sleep first.", "bad"); sfx("error"); return; }
   const range = hustleRange();
-  const pay = randInt(range.min, range.max);
+  const hustleMult = (typeof effectHustleMult === "function") ? effectHustleMult() : 1;
+  const pay = Math.max(1, Math.round(randInt(range.min, range.max) * hustleMult));
   state.energy -= 1;
   state.sideHustleDay = state.day;
   state.cash += pay;
   state.stats.bestCash = Math.max(state.stats.bestCash, state.cash);
-  addLog(`Side hustle paid ${fmt(pay)}.`, "win");
+  addLog(`Side hustle paid ${fmt(pay)}${hustleMult > 1 ? " (doubled)" : ""}.`, "win");
   sfx("coin");
   floatCash(pay);
   toast(`Side hustle — ${signedMoney(pay)}`, "good");
+  if (typeof metaOnHustle === "function") metaOnHustle(pay);
   saveState();
   renderAll();
   checkPrestigeUnlock();
@@ -810,6 +1091,18 @@ function settleGame(gameId, options = {}) {
   else if (type === "loss") toast(net < 0 ? `${summary.title} — ${signedMoney(net)}` : summary.title, "bad");
   else toast(summary.title, "gold");
 
+  if (typeof metaOnSettle === "function") {
+    metaOnSettle(gameId, {
+      result: type,
+      net,
+      bet,
+      payout,
+      title: summary.title,
+      sub: summary.sub,
+      big: summary.big
+    });
+  }
+
   saveState();
   renderAll();
 
@@ -848,6 +1141,11 @@ function showGameOver(reason = "You ran out of cash.") {
       <div class="gameover-stat"><span>PRESTIGE STARS</span><b>★ ${state.prestige.stars || 0}</b></div>
     </div>
     <div class="prestige-earned">Permanent stars carry into the next run.</div>
+    <div class="gameover-meta">
+      <span>PROFILE LV <b>${levelProgress().level}</b></span>
+      <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
+      <span>TIER <b style="color:${tierFor(totalStars()).color}">${tierFor(totalStars()).name}</b></span>
+    </div>
     <div class="gameover-actions">
       <button class="btn btn-gold btn-lg" data-action="restart-run">START A NEW RUN</button>
       <button class="btn btn-dark" data-action="show-help">RULES</button>
@@ -858,12 +1156,14 @@ function showGameOver(reason = "You ran out of cash.") {
 
 function restartRun() {
   if (!state) return;
-  const stars = state.prestige.stars || 0;
+  const stars = (typeof totalStars === "function") ? totalStars() : (state.prestige.stars || 0);
   const runs = (state.prestige.runs || 0) + 1;
   const stats = { ...state.stats };
   const sound = state.sound;
   const music = state.music;
   state = makeState({ stars, runs, stats, sound, music });
+  if (typeof recordRunStart === "function") recordRunStart();
+  if (typeof syncStars === "function") syncStars();
   resetUI();
   const layer = $("#gameoverLayer");
   if (layer) {
@@ -883,14 +1183,22 @@ function showPrestigeWin(earned) {
   if (!layer) return;
   ui.busy = false;
   stopMusic();
+  const tier = tierFor(totalStars());
+  const next = nextTierFor(totalStars());
+  const startCash = START_CASH + Math.min(totalStars(), 20) * 50 + perkLevel("headStart") * 100;
   layer.hidden = false;
   layer.innerHTML = `<div class="prestige-win-card">
     <div class="big-star">★</div>
     <div class="gameover-kicker">THE HOUSE PAID OUT</div>
     <h1>YOU WALKED OUT ALIVE</h1>
     <p>You banked <b>${earned}</b> prestige star${earned === 1 ? "" : "s"}. The revolver stays on the table. You do not.</p>
-    <p>Next run starts with <b>${fmt(START_CASH + Math.min(state.prestige.stars, 20) * 50)}</b> and permanent bonuses.</p>
-    <div class="prestige-earned">PERMANENT STARS <b>★ ${state.prestige.stars}</b></div>
+    <p>Next run starts with <b>${fmt(startCash)}</b> and permanent bonuses.</p>
+    <div class="prestige-earned">PERMANENT STARS <b>★ ${totalStars()}</b></div>
+    <div class="gameover-meta">
+      <span>TIER <b style="color:${tier.color}">${tier.name}</b></span>
+      <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
+      ${next ? `<span>NEXT TIER <b>${next.name} (${next.stars - totalStars()}★)</b></span>` : `<span>TOP TIER</span>`}
+    </div>
     <button class="btn btn-purple btn-lg" data-action="restart-run">START NEXT RUN</button>
   </div>`;
   sfx("prestige");
@@ -931,6 +1239,7 @@ async function russianPull() {
   state.russian.remaining -= 1;
   state.russian.earned += 1;
   state.russian.pulled += 1;
+  if (typeof metaOnRussian === "function") metaOnRussian(state.russian.earned);
   addLog(`Click. Empty chamber. ${state.russian.earned} seal${state.russian.earned === 1 ? "" : "s"} pending.`, "gold");
   sfx("empty");
   saveState();
@@ -948,8 +1257,12 @@ function cashOutRussian() {
     sfx("error");
     return;
   }
-  state.prestige.stars = (state.prestige.stars || 0) + earned;
-  state.stats.prestiges = (state.stats.prestiges || 0) + 1;
+  if (typeof metaOnPrestige === "function") {
+    metaOnPrestige(earned);
+  } else {
+    state.prestige.stars = (state.prestige.stars || 0) + earned;
+    state.stats.prestiges = (state.stats.prestiges || 0) + 1;
+  }
   state.prestigeWin = earned;
   addLog(`Cashed out ${earned} prestige star${earned === 1 ? "" : "s"}.`, "gold");
   saveState();

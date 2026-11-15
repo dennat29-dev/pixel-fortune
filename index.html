@@ -43,6 +43,7 @@
       </div>
 
       <div class="top-actions">
+        <button class="profile-chip" id="profileChip" data-action="go-vault" title="Profile and vault" aria-label="Profile and vault"></button>
         <button class="icon-btn" data-action="show-help" title="How to play" aria-label="How to play">?</button>
         <button class="icon-btn" id="musicBtn" data-action="toggle-music" title="Toggle music" aria-label="Toggle music" aria-pressed="true">♫</button>
         <button class="icon-btn" id="soundBtn" data-action="toggle-sound" title="Toggle sound effects" aria-label="Toggle sound effects">♪</button>
@@ -62,6 +63,16 @@
             <span><b>UPGRADE DEN</b><small>Spend cash. Bend luck.</small></span>
             <span class="rail-arrow">▸</span>
           </button>
+          <button class="rail-btn vault" data-action="go-vault" id="vaultBtn">
+            <span class="rail-btn-icon" data-icon="diamond"></span>
+            <span><b>THE VAULT</b><small id="vaultSub">Permanent unlocks</small></span>
+            <span class="rail-arrow">▸</span>
+          </button>
+          <button class="rail-btn trophies" data-action="go-trophies" id="trophiesBtn">
+            <span class="rail-btn-icon" data-icon="star"></span>
+            <span><b>TROPHIES</b><small id="trophiesSub">Achievements</small></span>
+            <span class="rail-arrow">▸</span>
+          </button>
           <button class="rail-btn backroom" data-action="go-backroom" id="backroomBtn">
             <span class="rail-btn-icon" data-icon="revolver"></span>
             <span><b>BACK ROOM</b><small id="backroomSub">Russian roulette</small></span>
@@ -74,6 +85,7 @@
       <main class="stage" id="stage" aria-live="polite"></main>
 
       <aside class="rightrail">
+        <div id="challengePanel"></div>
         <div id="debtPanel"></div>
         <div id="hustlePanel"></div>
         <div id="sleepPanel"></div>
@@ -96,6 +108,7 @@
 
   <script src="js/data.js"></script>
   <script src="js/canvas.js"></script>
+  <script src="js/meta.js"></script>
   <script src="js/core.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/games.js"></script>

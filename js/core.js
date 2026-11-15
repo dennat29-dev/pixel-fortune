@@ -54,32 +54,56 @@ function makeUI() {
 /* ------------------------------------------------------------
    Derived values
    ------------------------------------------------------------ */
+/* Permanent perks bought in the vault (see js/meta.js). */
+function perkLevel(key) {
+  return Math.max(0, Math.floor(Number(profile?.perks?.[key]) || 0));
+}
+
 function maxEnergy(s = state) {
   if (!s) return BASE_ENERGY;
   const level = s.upgradeLevels?.energy || 0;
   const starBonus = Math.min(10, s.prestige?.stars || 0) * 4;
-  return BASE_ENERGY + level * 4 + starBonus;
+  const perkBonus = perkLevel("warmBed") * 3;
+  return BASE_ENERGY + level * 4 + starBonus + perkBonus;
 }
 
 function payoutBonus(s = state) {
   if (!s) return 1;
   const level = s.upgradeLevels?.payout || 0;
   const stars = Math.min(10, s.prestige?.stars || 0);
-  return 1 + level * 0.05 + stars * 0.04;
+  const perkBonus = perkLevel("goldPlate") * 0.03;
+  return 1 + level * 0.05 + stars * 0.04 + perkBonus;
+}
+
+/* Payout multiplier for one cabinet, including temporary floor effects. */
+function payoutBonusFor(gameId, s = state) {
+  const base = payoutBonus(s);
+  const effect = (typeof effectPayoutPct === "function") ? effectPayoutPct(gameId, s) : 0;
+  return Math.max(0, base * (1 + effect));
 }
 
 function payoutBonusPercent(s = state) {
   return Math.round((payoutBonus(s) - 1) * 100);
 }
 
+function payoutBonusPercentFor(gameId, s = state) {
+  return Math.round((payoutBonusFor(gameId, s) - 1) * 100);
+}
+
 function luckBonus(s = state) {
   if (!s) return 0;
-  return (s.upgradeLevels?.luck || 0) * 0.015;
+  const upgrade = (s.upgradeLevels?.luck || 0) * 0.015;
+  const perk = perkLevel("luckyCharm") * 0.012;
+  const effect = (typeof effectLuckPct === "function") ? effectLuckPct(s) : 0;
+  return upgrade + perk + effect;
 }
 
 function debtModifier(s = state) {
   if (!s) return 1;
-  return 1 - (s.upgradeLevels?.debt || 0) * 0.12;
+  const upgrade = 1 - (s.upgradeLevels?.debt || 0) * 0.12;
+  const perk = 1 - perkLevel("silverTongue") * 0.08;
+  const effect = (typeof effectDebtMult === "function") ? effectDebtMult(s) : 1;
+  return Math.max(0.2, upgrade * perk * effect);
 }
 
 function totalDebt(s = state) {
@@ -123,9 +147,11 @@ function makeState(options = {}) {
   const stars = Math.max(0, Math.floor(Number(options.stars) || 0));
   const runs = Math.max(0, Math.floor(Number(options.runs) || 0));
   const stats = { ...statsDefaults(), ...(options.stats || {}) };
+  const headStart = (typeof perkLevel === "function" ? perkLevel("headStart") : 0) * 100;
+  const startCash = START_CASH + Math.min(stars, 20) * 50 + headStart;
   const s = {
     version: SAVE_VERSION,
-    cash: START_CASH + Math.min(stars, 20) * 50,
+    cash: startCash,
     day: 1,
     energy: BASE_ENERGY,
     upgradeLevels: { energy: 0, debt: 0, payout: 0, luck: 0 },
@@ -135,12 +161,15 @@ function makeState(options = {}) {
     prestige: {
       stars,
       runs,
-      bestCash: Math.max(stats.bestCash || 0, START_CASH + Math.min(stars, 20) * 50)
+      bestCash: Math.max(stats.bestCash || 0, startCash)
     },
     prestigeUnlocked: false,
     offerExpired: false,
     prestigeWin: 0,
     russian: { remaining: 6, earned: 0, pulled: 0 },
+    runStats: (typeof defaultRunStats === "function") ? defaultRunStats() : null,
+    effects: [],
+    challenges: (typeof rollRunChallenges === "function") ? rollRunChallenges() : [],
     stats,
     sound: options.sound !== false,
     music: options.music !== false,
@@ -273,6 +302,19 @@ function loadState() {
       s.russian.earned = clamp(Math.floor(num(p.russian.earned, 0)), 0, 5);
       s.russian.pulled = clamp(Math.floor(num(p.russian.pulled, 0)), 0, 5);
     }
+
+    s.runStats = (p.runStats && typeof p.runStats === "object")
+      ? { ...defaultRunStats(), ...p.runStats }
+      : defaultRunStats();
+    s.effects = Array.isArray(p.effects)
+      ? p.effects.filter(e => e && typeof e.id === "string" && Number.isFinite(Number(e.untilDay)))
+      : [];
+    const knownContract = (typeof contractById === "function") ? contractById : () => true;
+    s.challenges = Array.isArray(p.challenges)
+      ? p.challenges
+          .filter(c => c && typeof c.id === "string" && knownContract(c.id))
+          .map(c => ({ id: c.id, done: !!c.done }))
+      : rollRunChallenges();
 
     if (p.bets && typeof p.bets === "object") {
       GAMES.forEach(game => {

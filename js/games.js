@@ -53,7 +53,7 @@ function gameHint(gameId) {
 function renderGameScreen(gameId) {
   const game = getGame(gameId);
   if (!game) return renderLobby();
-  return `<div class="screen game-screen">
+  return `<div class="screen game-screen" ${typeof designAttrs === "function" ? designAttrs() : ""}>
     ${gameHeadHTML(game)}
     <section class="game-panel">${renderGameBody(gameId)}</section>
     ${renderResultStrip(gameId)}
@@ -193,7 +193,7 @@ async function playCoin() {
 
   ui.busy = false;
   game.phase = "done";
-  const payout = won ? bet * 2 * payoutBonus() : 0;
+  const payout = won ? bet * 2 * payoutBonusFor("coin") : 0;
   settleGame("coin", {
     bet,
     payout,
@@ -285,7 +285,7 @@ async function playDice() {
   ui.busy = false;
 
   const total = game.values[0] + game.values[1];
-  const payout = won ? bet * 1.92 * payoutBonus() : 0;
+  const payout = won ? bet * 1.92 * payoutBonusFor("dice") : 0;
   settleGame("dice", {
     bet,
     payout,
@@ -458,7 +458,7 @@ function bjFinish(kind, note = "") {
     title = "PUSH";
     sub = note || "Stake returned. Nobody wins.";
   } else if (kind === "blackjack") {
-    payout = bet * 2.5 * payoutBonus();
+    payout = bet * 2.5 * payoutBonusFor("blackjack");
     type = "win";
     title = "BLACKJACK!";
     sub = note || "Natural 21 pays 3:2.";
@@ -468,7 +468,7 @@ function bjFinish(kind, note = "") {
     title = "DEALER BLACKJACK";
     sub = note || "The house had it all along.";
   } else if (kind === "win") {
-    payout = bet * 2 * payoutBonus();
+    payout = bet * 2 * payoutBonusFor("blackjack");
     type = "win";
     title = "YOU WIN";
     sub = note || "Your hand is better.";
@@ -676,7 +676,7 @@ async function holdemShowdown() {
   if (compare > 0) {
     settleGame("holdem", {
       bet,
-      payout: bet * 1.9 * payoutBonus(),
+      payout: bet * 1.9 * payoutBonusFor("holdem"),
       type: "win",
       title: "POT GOES TO YOU",
       sub: `Your ${player.name} beats the dealer's ${dealer.name}.`
@@ -834,7 +834,7 @@ async function playRoulette() {
 
   settleGame("roulette", {
     bet,
-    payout: won ? bet * mult * payoutBonus() : 0,
+    payout: won ? bet * mult * payoutBonusFor("roulette") : 0,
     type: won ? "win" : "loss",
     title: `THE BALL LANDS ON ${pocketLabel(pocket)}`,
     sub: `${rouletteBetLabel(game)} ${won ? `pays ${mult}x.` : "loses to the wheel."}`
@@ -883,7 +883,7 @@ async function playPlinko() {
   await runPlinkoDrop(rights, bucket);
 
   const mult = PLINKO_MULTS[bucket];
-  const payout = bet * mult * payoutBonus();
+  const payout = bet * mult * payoutBonusFor("plinko");
   game.lastBucket = bucket;
   game.phase = "done";
   ui.busy = false;
@@ -1000,7 +1000,7 @@ async function playSlots() {
 
   settleGame("slots", {
     bet,
-    payout: mult > 0 ? bet * mult * payoutBonus() : 0,
+    payout: mult > 0 ? bet * mult * payoutBonusFor("slots") : 0,
     type: mult > 0 ? "win" : "loss",
     title,
     sub
@@ -1072,7 +1072,7 @@ async function playHorses() {
   const picked = HORSES[game.pick] || HORSES[0];
   settleGame("horses", {
     bet,
-    payout: won ? bet * picked.odds * payoutBonus() : 0,
+    payout: won ? bet * picked.odds * payoutBonusFor("horses") : 0,
     type: won ? "win" : "loss",
     title: won ? `${picked.name} WINS` : `${winner.name} WINS`,
     sub: won

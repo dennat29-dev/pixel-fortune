@@ -6,6 +6,8 @@ const ACTIONS = {
   "go-lobby": () => navigate("lobby"),
   "go-shop": () => navigate("shop"),
   "go-backroom": () => navigate("backroom"),
+  "go-vault": () => navigate("vault"),
+  "go-trophies": () => navigate("trophies"),
   "open-game": el => navigate("game", el.dataset.game),
   "toggle-sound": () => toggleSound(),
   "toggle-music": () => toggleMusic(),
@@ -32,7 +34,10 @@ const ACTIONS = {
   "sleep": () => doSleep(),
   "restart-run": () => restartRun(),
   "russian-pull": () => russianPull(),
-  "russian-cashout": () => cashOutRussian()
+  "russian-cashout": () => cashOutRussian(),
+  "buy-unlock": el => buyUnlock(el.dataset.kind, el.dataset.id),
+  "equip-item": el => equipItem(el.dataset.kind, el.dataset.id),
+  "buy-perk": el => buyPerk(el.dataset.perk)
 };
 
 function onDocumentClick(event) {
@@ -80,10 +85,16 @@ function onDocumentKeydown(event) {
 }
 
 function init() {
+  profile = loadProfile();
+  let hadSave = false;
+  try { hadSave = !!localStorage.getItem(SAVE_KEY); } catch (err) { hadSave = false; }
   state = loadState();
+  if (typeof syncStars === "function") syncStars();
+  if (typeof applyTheme === "function") applyTheme();
   resetUI();
   injectStaticIcons();
   lastCashShown = null;
+  if (!hadSave && typeof recordRunStart === "function") recordRunStart();
   updatePrestigeExpiry();
   renderAll();
 
@@ -93,6 +104,7 @@ function init() {
     showGameOver(state.gameOverReason || "The run ended. The house is patient.");
   } else {
     checkPrestigeUnlock();
+    if (typeof showIntro === "function") showIntro();
   }
 
   document.addEventListener("click", onDocumentClick);
@@ -128,7 +140,10 @@ function installDebugAPI() {
   window.PF = {
     save: saveState,
     reload() {
+      profile = loadProfile();
       state = loadState();
+      if (typeof syncStars === "function") syncStars();
+      if (typeof applyTheme === "function") applyTheme();
       resetUI();
       lastCashShown = null;
       renderAll();
@@ -136,6 +151,7 @@ function installDebugAPI() {
     resetSave() {
       try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* ignore */ }
       state = makeState();
+      if (typeof syncStars === "function") syncStars();
       resetUI();
       lastCashShown = null;
       renderAll();
@@ -167,7 +183,12 @@ function installDebugAPI() {
       renderAll();
     },
     addStars(amount = 1) {
-      state.prestige.stars = Math.max(0, (state.prestige.stars || 0) + Math.round(Number(amount) || 0));
+      const delta = Math.round(Number(amount) || 0);
+      state.prestige.stars = Math.max(0, (state.prestige.stars || 0) + delta);
+      if (typeof profile !== "undefined" && profile) {
+        profile.stars = Math.max(0, (profile.stars || 0) + delta);
+        if (typeof saveProfile === "function") saveProfile();
+      }
       state.energy = maxEnergy();
       saveState();
       renderAll();
@@ -197,11 +218,49 @@ function installDebugAPI() {
       showGameOver("Debug bust. The house collected.");
     },
     sleep: () => doSleep(),
-    openGame: id => navigate("game", id)
+    openGame: id => navigate("game", id),
+    addTokens(amount = 10) {
+      if (typeof grantTokens === "function") grantTokens(Math.round(Number(amount) || 0), "debug");
+      renderAll();
+    },
+    addXP(amount = 100) {
+      if (typeof addXP === "function") addXP(Math.round(Number(amount) || 0), "debug");
+      renderAll();
+    },
+    setLevel(level = 1) {
+      if (typeof profile !== "undefined" && profile && typeof levelStartXp === "function") {
+        profile.xp = levelStartXp(Math.max(1, Math.round(Number(level) || 1)));
+        if (typeof saveProfile === "function") saveProfile();
+      }
+      renderAll();
+    },
+    unlockAll() {
+      if (typeof profile !== "undefined" && profile && typeof VAULT_KINDS === "object") {
+        profile.unlocked = profile.unlocked || {};
+        Object.keys(VAULT_KINDS).forEach(kind => {
+          (typeof vaultList === "function" ? vaultList(kind) : []).forEach(item => {
+            profile.unlocked[`${kind}:${item.id}`] = true;
+          });
+        });
+        if (typeof saveProfile === "function") saveProfile();
+      }
+      renderAll();
+      toast("All vault items unlocked (debug).", "gold");
+    },
+    resetProfile() {
+      try {
+        if (typeof PROFILE_KEY === "string") localStorage.removeItem(PROFILE_KEY);
+      } catch (err) { /* ignore */ }
+      if (typeof defaultProfile === "function") profile = defaultProfile();
+      if (typeof applyTheme === "function") applyTheme();
+      renderAll();
+      toast("Profile wiped (debug).", "gold");
+    }
   };
 
   Object.defineProperty(window.PF, "state", { get: () => state });
   Object.defineProperty(window.PF, "ui", { get: () => ui });
+  Object.defineProperty(window.PF, "profile", { get: () => profile });
 }
 
 installDebugAPI();
