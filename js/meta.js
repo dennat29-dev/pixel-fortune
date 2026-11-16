@@ -175,7 +175,6 @@ function addXP(amount, reason = "") {
     grantTokens(tokens, `level ${after}`);
     sfx("upgrade");
     toast(`LEVEL ${after} — ${tokens} token${tokens === 1 ? "" : "s"} earned`, "gold");
-    if (typeof floatCash === "function") floatCash(0);
   } else if (reason) {
     toast(`+${gain} XP — ${reason}`, "info");
   }
@@ -615,6 +614,67 @@ function updateChallenges(ev) {
 }
 
 /* ------------------------------------------------------------
+   Run modifiers ("house rules") drawn fresh every run
+   ------------------------------------------------------------ */
+const MODIFIERS = [
+  { id: "hot_floor", name: "HOT FLOOR", icon: "clover", tone: "good", desc: "Every cabinet pays a little better, and the odds lean your way.", payout: 0.12, luck: 0.02 },
+  { id: "golden_age", name: "GOLDEN AGE", icon: "coin", tone: "good", desc: "The house is generous tonight — but it bills you for it.", payout: 0.09, debt: 0.15 },
+  { id: "overtime", name: "OVERTIME", icon: "bolt", tone: "good", desc: "You came in rested. More energy every day.", energy: 8, payout: -0.04 },
+  { id: "silver_spoon", name: "SILVER SPOON", icon: "cash", tone: "mixed", desc: "A cushion of cash, but you tire faster.", startCash: 500, energy: -5 },
+  { id: "cold_house", name: "COLD HOUSE", icon: "moon", tone: "mixed", desc: "Tighter payouts, but the sharks are lazy.", payout: -0.07, debt: -0.35 },
+  { id: "shark_pressure", name: "SHARK PRESSURE", icon: "shark", tone: "mixed", desc: "Heavier bills, but the side hustle pays double.", debt: 0.45, hustle: 1.0 },
+  { id: "lucky_run", name: "LUCKY RUN", icon: "clover", tone: "mixed", desc: "The dice love you; the payouts do not.", luck: 0.03, payout: -0.05 },
+  { id: "double_or_nothing", name: "DOUBLE OR NOTHING", icon: "star", tone: "risky", desc: "Twice the debt. Twice the payout. Sleep well.", debt: 1.0, payout: 1.0 },
+  { id: "thin_margins", name: "THIN MARGINS", icon: "gear", tone: "mixed", desc: "Weaker payouts, more cash to start.", payout: -0.06, startCash: 350 },
+  { id: "iron_will", name: "IRON WILL", icon: "bolt", tone: "mixed", desc: "Endless stamina, softer payouts.", energy: 6, payout: -0.06 },
+  { id: "grinder", name: "GRINDER", icon: "gear", tone: "mixed", desc: "The hustle pays more; the tables pay less.", hustle: 0.6, payout: -0.03 }
+];
+
+function modifierById(id) { return MODIFIERS.find(m => m.id === id) || null; }
+
+function runModifiers(s = state) {
+  if (!s || !Array.isArray(s.modifiers)) return [];
+  return s.modifiers.map(modifierById).filter(Boolean);
+}
+
+function runModTotal(field, s = state) {
+  return runModifiers(s).reduce((sum, m) => sum + (Number(m[field]) || 0), 0);
+}
+
+function rollRunModifiers() {
+  const count = chance(0.5) ? 2 : 1;
+  const pool = shuffle(MODIFIERS.slice());
+  return pool.slice(0, count).map(m => m.id);
+}
+
+function modifierSummary() {
+  return runModifiers().map(m => `${m.name}: ${m.desc}`).join(" ");
+}
+
+/* ------------------------------------------------------------
+   The Shark's Tithe — a long-run win condition
+   ------------------------------------------------------------ */
+const TITHE_REWARD = { stars: 3, tokens: 8, xp: 160 };
+
+function titheReady(s = state) {
+  return !!s && !s.gameOver && !s.titheWin && s.day >= TITHE_DAY && s.cash >= TITHE_AMOUNT;
+}
+
+function metaOnTithe() {
+  if (!profile || !state) return;
+  state.prestige.stars = Math.max(0, state.prestige.stars || 0) + TITHE_REWARD.stars;
+  profile.stars = Math.max(profile.stars || 0, state.prestige.stars);
+  state.stats.prestiges = (state.stats.prestiges || 0) + 1;
+  profile.lifetime.prestiges += 1;
+  profile.lifetime.starsEarned += TITHE_REWARD.stars;
+  addXP(TITHE_REWARD.xp, "the tithe");
+  grantTokens(TITHE_REWARD.tokens, "the tithe");
+  checkAchievements({ type: "tithe" });
+  updateChallenges({ type: "tithe" });
+  saveProfile();
+}
+
+/* ------------------------------------------------------------
    Random morning events
    ------------------------------------------------------------ */
 const EVENTS = [
@@ -731,6 +791,7 @@ function effectDebtMult(s = state) {
 function effectHustleMult(s = state) {
   let mult = 1;
   activeEffects(s).forEach(e => { if (e.hustleMult) mult *= e.hustleMult; });
+  if (typeof runModTotal === "function") mult *= (1 + runModTotal("hustle", s));
   return mult;
 }
 
@@ -780,6 +841,7 @@ const ACHIEVEMENTS = [
   { id: "five_seals", name: "FIVE CHAMBERS", desc: "Pull five safe chambers in one visit.", icon: "revolver", reward: { tokens: 5, xp: 80 }, check: (s, p, ev) => ev.type === "russian" && ev.earned >= 5 },
   { id: "prestige_1", name: "WALKED OUT", desc: "Cash out prestige for the first time.", icon: "star", reward: { tokens: 3, xp: 60 }, check: (s, p) => p.lifetime.prestiges >= 1 },
   { id: "prestige_10", name: "REGULAR", desc: "Cash out prestige ten times.", icon: "star", reward: { tokens: 6, xp: 110 }, check: (s, p) => p.lifetime.prestiges >= 10 },
+  { id: "freedom", name: "FREEDOM", desc: "Pay the Shark's Tithe and walk away clean.", icon: "star", reward: { tokens: 4, xp: 60 }, check: (s, p, ev) => ev.type === "tithe" },
   { id: "stars_25", name: "COLLECTOR", desc: "Hold 25 permanent stars.", icon: "star", reward: { tokens: 4, xp: 70 }, check: (s, p) => totalStars() >= 25 },
   { id: "stars_50", name: "STAR BARON", desc: "Hold 50 permanent stars.", icon: "star", reward: { tokens: 7, xp: 140 }, check: (s, p) => totalStars() >= 50 },
   { id: "level_10", name: "VETERAN", desc: "Reach profile level 10.", icon: "bolt", reward: { tokens: 3, xp: 0 }, check: (s, p) => (p.level || 1) >= 10 },
@@ -811,8 +873,19 @@ function checkAchievements(ev = {}) {
   if (!unlocked.length) return [];
   unlocked.forEach(a => {
     if (a.reward.tokens) profile.tokens += a.reward.tokens;
-    if (a.reward.xp) { profile.xp += Math.round(a.reward.xp * xpMultiplier()); }
-    profile.level = levelFromXp(profile.xp);
+    if (a.reward.xp) {
+      const before = profile.level || 1;
+      profile.xp += Math.round(a.reward.xp * xpMultiplier());
+      const after = levelFromXp(profile.xp);
+      profile.level = after;
+      if (after > before) {
+        let tokens = 0;
+        for (let l = before + 1; l <= after; l++) tokens += 1 + Math.floor(l / 5);
+        tokens += (profile.perks?.tokenFinder || 0) * (after - before);
+        profile.tokens += tokens;
+        toast(`LEVEL ${after} — ${tokens} token${tokens === 1 ? "" : "s"} earned`, "gold");
+      }
+    }
     toast(`🏆 ${a.name} — +${a.reward.tokens} ◆`, "gold");
   });
   saveProfile();

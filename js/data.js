@@ -8,7 +8,9 @@ const BASE_ENERGY = 20;
 const DEBT_TERM_DAYS = 5;
 const PRESTIGE_GOAL = 2000;
 const PRESTIGE_DAY = 10;
-const START_CASH = 300;
+const TITHE_DAY = 20;
+const TITHE_AMOUNT = 5000;
+const START_CASH = 350;
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
 const GAMES = [
@@ -72,7 +74,7 @@ const DEFAULT_BETS = GAMES.reduce((acc, game) => {
 const UPGRADE_TYPES = {
   energy: {
     name: "POWER CELL", icon: "bolt", max: 3,
-    costs: [150, 500, 1200],
+    costs: [120, 420, 1000],
     desc: "+4 max energy every day.",
     effect: level => `+${level * 4} max energy`,
     color: "#5cf58f"

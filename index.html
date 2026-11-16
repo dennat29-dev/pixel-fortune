@@ -45,6 +45,7 @@
       <div class="top-actions">
         <button class="profile-chip" id="profileChip" data-action="go-vault" title="Profile and vault" aria-label="Profile and vault"></button>
         <button class="icon-btn" data-action="show-help" title="How to play" aria-label="How to play">?</button>
+        <button class="icon-btn" id="settingsBtn" data-action="open-settings" title="Settings" aria-label="Settings"><span data-icon="gear"></span></button>
         <button class="icon-btn" id="musicBtn" data-action="toggle-music" title="Toggle music" aria-label="Toggle music" aria-pressed="true">♫</button>
         <button class="icon-btn" id="soundBtn" data-action="toggle-sound" title="Toggle sound effects" aria-label="Toggle sound effects">♪</button>
       </div>
@@ -58,7 +59,7 @@
         </div>
         <nav class="cabinet-nav" id="cabinetNav" aria-label="Games"></nav>
         <div class="sidebar-tools">
-          <button class="rail-btn" data-action="go-shop" id="shopBtn">
+          <button class="rail-btn shop" data-action="go-shop" id="shopBtn">
             <span class="rail-btn-icon" data-icon="gear"></span>
             <span><b>UPGRADE DEN</b><small>Spend cash. Bend luck.</small></span>
             <span class="rail-arrow">▸</span>
@@ -86,6 +87,7 @@
 
       <aside class="rightrail">
         <div id="challengePanel"></div>
+        <div id="tithePanel"></div>
         <div id="debtPanel"></div>
         <div id="hustlePanel"></div>
         <div id="sleepPanel"></div>

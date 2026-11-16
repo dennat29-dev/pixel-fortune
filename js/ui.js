@@ -187,7 +187,7 @@ function renderRightRail() {
     <div class="panel-head"><b>SHARK LEDGER</b><span class="tag">${debts.length} BILL${debts.length === 1 ? "" : "S"}</span></div>
     <div class="debt-total-row"><strong>${fmt(total)}</strong><span>${next ? `next due Day ${next.dueDay}` : "all clear"}</span></div>
     <p class="debt-warning">${urgent
-      ? `A bill is due <b>today</b>. Pay it or lose the run.`
+      ? `A bill is due <b>today</b>. Pay it before you sleep, or the run ends.`
       : next
         ? `Next bill lands Day <b>${next.dueDay}</b>. Sleep only if you can cover it.`
         : `No sharks at the door. Yet.`}</p>
@@ -201,7 +201,7 @@ function renderRightRail() {
       </div>`).join("") : `<div class="debt-note"><div class="debt-note-info"><b>$0</b><small>LEDGER EMPTY</small></div></div>`}
     </div>
     <button class="mini-btn gold full-btn" data-action="pay-all-debts" ${!debts.length || state.cash < total || ui.busy ? "disabled" : ""}>PAY ALL — ${fmt(total)}</button>
-    <div class="debt-foot">Bills arrive each morning and come due after <b>${DEBT_TERM_DAYS} days</b>. An unpaid bill on its due day ends the run.</div>
+    <div class="debt-foot">Bills arrive each morning and come due after <b>${DEBT_TERM_DAYS} days</b>. Pay a bill before you sleep past its due day, or the run ends.</div>
   </div>`;
 
   const range = hustleRange();
@@ -237,7 +237,20 @@ function renderRightRail() {
     const chs = Array.isArray(state.challenges) ? state.challenges : [];
     const effects = (typeof activeEffects === "function") ? activeEffects() : [];
     const doneCount = chs.filter(c => c.done).length;
-    challengePanel.innerHTML = `<div class="panel challenge-panel">
+    const mods = (typeof runModifiers === "function") ? runModifiers() : [];
+    const modStrip = mods.length ? `<div class="panel modifier-panel">
+      <div class="panel-head"><b>HOUSE RULES</b><span class="tag">${mods.length} THIS RUN</span></div>
+      <div class="modifier-list">
+        ${mods.map(m => `<div class="modifier ${m.tone || ""}">
+          <span class="modifier-icon">${sprite(m.icon)}</span>
+          <div class="modifier-copy">
+            <div class="modifier-name">${m.name}</div>
+            <div class="modifier-desc">${m.desc}</div>
+          </div>
+        </div>`).join("")}
+      </div>
+    </div>` : "";
+    challengePanel.innerHTML = modStrip + `<div class="panel challenge-panel">
       <div class="panel-head"><b>RUN CONTRACTS</b><span class="tag">${doneCount}/${chs.length}</span></div>
       <div class="challenge-list">
         ${chs.length ? chs.map(ch => {
@@ -258,6 +271,79 @@ function renderRightRail() {
       ${effects.length ? `<div class="effect-strip">${effects.map(e => `<span class="effect-chip" title="${e.name}">${sprite(e.icon)}<span>${e.name}</span></span>`).join("")}</div>` : ""}
     </div>`;
   }
+
+  renderTithePanel();
+}
+
+function renderTithePanel() {
+  const panel = $("#tithePanel");
+  if (!panel) return;
+  if (state.titheWin) {
+    panel.innerHTML = `<div class="panel tithe-panel won">
+      <div class="panel-head"><b>THE SHARK'S TITHE</b><span class="tag">PAID</span></div>
+      <p>You paid the tithe on Day ${state.day}. The ledger is clean.</p>
+    </div>`;
+    return;
+  }
+  const dayOk = state.day >= TITHE_DAY;
+  const cashOk = state.cash >= TITHE_AMOUNT;
+  const ready = (typeof titheReady === "function") ? titheReady() : (dayOk && cashOk);
+  panel.innerHTML = `<div class="panel tithe-panel ${ready ? "ready" : ""}">
+    <div class="panel-head"><b>THE SHARK'S TITHE</b><span class="tag">DAY ${TITHE_DAY}</span></div>
+    <p>Reach <b>${fmt(TITHE_AMOUNT)}</b> by Day <b>${TITHE_DAY}</b>, then pay it to walk away clean — a win, not a bust.</p>
+    <div class="tithe-reqs">
+      <span class="tithe-req ${cashOk ? "met" : ""}">CASH ${fmt(state.cash)} / ${fmt(TITHE_AMOUNT)}</span>
+      <span class="tithe-req ${dayOk ? "met" : ""}">DAY ${state.day} / ${TITHE_DAY}</span>
+    </div>
+    <button class="btn btn-gold btn-block btn-sm" data-action="pay-tithe" ${ready && !ui.busy ? "" : "disabled"}>PAY THE TITHE — ${fmt(TITHE_AMOUNT)}</button>
+    <div class="sleep-hint">Reward: ★ ${TITHE_REWARD.stars} • ${TITHE_REWARD.tokens} ◆ • ${TITHE_REWARD.xp} XP. Ends the run in a win.</div>
+  </div>`;
+}
+
+function payTithe() {
+  if (ui.busy || ui.sleeping || state.gameOver || state.titheWin) return;
+  if (typeof titheReady !== "function" || !titheReady()) {
+    toast(`Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} to pay the tithe.`, "bad");
+    sfx("error");
+    return;
+  }
+  state.cash -= TITHE_AMOUNT;
+  state.titheWin = 1;
+  if (typeof metaOnTithe === "function") metaOnTithe();
+  addLog(`Paid the Shark's Tithe — ${fmt(TITHE_AMOUNT)}. Walked away clean.`, "win");
+  saveState();
+  renderAll();
+  showTitheWin();
+}
+
+function showTitheWin() {
+  const layer = $("#gameoverLayer");
+  if (!layer) return;
+  ui.busy = false;
+  ui.sleeping = false;
+  stopMusic();
+  const tier = tierFor(totalStars());
+  const next = nextTierFor(totalStars());
+  layer.hidden = false;
+  layer.innerHTML = `<div class="prestige-win-card tithe-win-card">
+    <div class="big-star">⚖</div>
+    <div class="gameover-kicker">THE LEDGER IS CLEAN // DAY ${state.day}</div>
+    <h1>YOU PAID THE TITHE</h1>
+    <p>You handed the Shark <b>${fmt(TITHE_AMOUNT)}</b> and walked out the front door. No revolver, no chase — just quiet, and a clean record.</p>
+    <div class="tithe-rewards">
+      <div class="tithe-reward"><span>STARS</span><b>★ ${TITHE_REWARD.stars}</b></div>
+      <div class="tithe-reward"><span>TOKENS</span><b>${TITHE_REWARD.tokens} ◆</b></div>
+      <div class="tithe-reward"><span>XP</span><b>${TITHE_REWARD.xp}</b></div>
+    </div>
+    <div class="prestige-earned">PERMANENT STARS <b>★ ${totalStars()}</b></div>
+    <div class="gameover-meta">
+      <span>TIER <b style="color:${tier.color}">${tier.name}</b></span>
+      <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
+      ${next ? `<span>NEXT TIER <b>${next.name} (${next.stars - totalStars()}★)</b></span>` : `<span>TOP TIER</span>`}
+    </div>
+    <button class="btn btn-gold btn-lg" data-action="restart-run">START NEXT RUN</button>
+  </div>`;
+  sfx("prestige");
 }
 
 function renderAll() {
@@ -374,7 +460,7 @@ function renderLobby() {
     <div class="survival-strip">
       <div class="survival-item ${due.length ? "hot" : ""}"><b>SHARK WATCH</b>${due.length ? `${due.length} bill${due.length === 1 ? "" : "s"} due today. Pay up or the run ends.` : next ? `Next bill is due Day ${next.dueDay} (${fmt(next.amount)}).` : "No bills. Something is wrong."}</div>
       <div class="survival-item"><b>ENERGY</b>${state.energy}/${maxEnergy()} left. Every play burns energy. Sleep to reset, but a new bill arrives.</div>
-      <div class="survival-item"><b>PRESTIGE</b>${state.prestigeUnlocked ? "The back room is open. Cash out Russian roulette to keep permanent stars." : state.offerExpired ? "This run's back-room offer expired. Try again next run." : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY}.`}</div>
+      <div class="survival-item"><b>PRESTIGE</b>${state.prestigeUnlocked ? "The back room is open. Cash out Russian roulette to keep permanent stars." : state.offerExpired ? "This run's back-room offer expired. Pay the Shark's Tithe on Day 20 to end the run in a win." : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY}.`}</div>
     </div>
 
     <div class="lore-panel">
@@ -825,15 +911,17 @@ function showHelp() {
     <p>Gambler's Fortune runs on <b>virtual currency only</b>. Every game costs energy. Every morning a new debt bill lands, and every bill comes due five days later.</p>
     <div class="help-grid">
       <div class="help-item"><b>ENERGY</b>Each play burns energy. Run dry and you must sleep.</div>
-      <div class="help-item"><b>DEBT</b>Bills appear each new day. Miss one on its due day and the run ends.</div>
+      <div class="help-item"><b>DEBT</b>Bills appear each new day. Pay one before you sleep past its due day, or the run ends.</div>
       <div class="help-item"><b>SIDE HUSTLE</b>Once per day, burn 1 energy for a small payout.</div>
       <div class="help-item"><b>SLEEP</b>Restores energy and advances the day. A new bill arrives.</div>
       <div class="help-item"><b>BANKRUPT</b>Hit zero cash and the run is over. Start a new one.</div>
       <div class="help-item"><b>PRESTIGE</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock the back room.</div>
+      <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay it to end the run in a win.</div>
+      <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that bend payouts, energy and debt. Read them in the right rail.</div>
       <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
       <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
       <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
-      <div class="help-item"><b>SOUND</b>Use the ♫ and ♪ buttons up top to toggle music and effects.</div>
+      <div class="help-item"><b>SETTINGS</b>Use the ⚙ button up top for volume, save codes and reset.</div>
     </div>
     <p>Wins return your stake plus profit. Losses take the stake. The odds are sharp, but cold streaks end.</p>
     <div class="modal-actions"><button class="btn btn-gold" data-action="close-modal">GOT IT</button></div>`);
@@ -847,14 +935,133 @@ function showIntro() {
     <p>A neon arcade casino with <b>virtual currency only</b>. You start with a little cash, a lot of energy, and a ledger that follows you everywhere.</p>
     <div class="help-grid">
       <div class="help-item"><b>THE FLOOR</b>Eight cabinets. Each play burns energy and pays out — or does not.</div>
-      <div class="help-item"><b>THE SHARKS</b>A new bill lands every morning and comes due in five days. Miss one and the run ends.</div>
+      <div class="help-item"><b>THE SHARKS</b>A new bill lands every morning and comes due in five days. Pay it before you sleep past the due day, or the run ends.</div>
+      <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that change payouts, energy and debt. No two runs play the same.</div>
       <div class="help-item"><b>THE BACK ROOM</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock Russian roulette and permanent stars.</div>
+      <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay the Shark to walk away a winner.</div>
       <div class="help-item"><b>THE VAULT</b>Level up and bank tokens to unlock themes, skins, dice, cards and permanent perks.</div>
       <div class="help-item"><b>CONTRACTS</b>Every run draws three random contracts. Complete them for tokens and XP.</div>
       <div class="help-item"><b>THE LEDGER</b>Stars, tokens, achievements and every unlock carry into your next run.</div>
     </div>
     <p>Nothing here is real money. The regret is real. Good luck.</p>
     <div class="modal-actions"><button class="btn btn-gold" data-action="close-modal">DEAL ME IN</button></div>`, "intro-modal");
+}
+
+/* ------------------------------------------------------------
+   Settings — volume, save codes, reset
+   ------------------------------------------------------------ */
+function showSettings() {
+  if (!state) return;
+  const musicPct = Math.round(clamp(Number(state.musicVolume ?? 1), 0, 1) * 100);
+  const sfxPct = Math.round(clamp(Number(state.sfxVolume ?? 1), 0, 1) * 100);
+  openModal(`<h2>SETTINGS</h2>
+    <div class="settings-block">
+      <div class="settings-title">VOLUME</div>
+      <div class="settings-row">
+        <label for="musicVolRange">MUSIC</label>
+        <input type="range" id="musicVolRange" min="0" max="100" step="1" value="${musicPct}" data-setting="music" aria-label="Music volume" />
+        <span id="musicVolOut">${musicPct}%</span>
+      </div>
+      <div class="settings-row">
+        <label for="sfxVolRange">SOUND FX</label>
+        <input type="range" id="sfxVolRange" min="0" max="100" step="1" value="${sfxPct}" data-setting="sfx" aria-label="Sound effect volume" />
+        <span id="sfxVolOut">${sfxPct}%</span>
+      </div>
+    </div>
+    <div class="settings-block">
+      <div class="settings-title">SAVE CODE</div>
+      <p class="settings-note">Copy this code to back up your run and permanent profile, or paste one to restore. Keep it somewhere safe — it is the only backup.</p>
+      <textarea id="saveCodeBox" class="save-code" spellcheck="false" autocomplete="off" placeholder="Paste a save code here to restore..."></textarea>
+      <div class="settings-actions">
+        <button class="btn btn-cyan btn-sm" data-action="copy-save">COPY MY CODE</button>
+        <button class="btn btn-green btn-sm" data-action="import-save">RESTORE FROM CODE</button>
+      </div>
+      <div class="settings-status" id="saveStatus"></div>
+    </div>
+    <div class="settings-block danger">
+      <div class="settings-title">DANGER ZONE</div>
+      <p class="settings-note">Wipe your run <b>and</b> your permanent profile — levels, tokens, stars, unlocks and achievements. This cannot be undone.</p>
+      <button class="btn btn-red btn-sm" data-action="reset-progress">RESET EVERYTHING</button>
+    </div>
+    <div class="modal-actions"><button class="btn btn-gold" data-action="close-modal">DONE</button></div>`, "settings-modal");
+}
+
+async function copySaveCode() {
+  const code = (typeof exportSaveCode === "function") ? exportSaveCode() : "";
+  const box = $("#saveCodeBox");
+  const status = $("#saveStatus");
+  if (!code) {
+    if (status) status.textContent = "Could not build a save code.";
+    toast("Could not build a save code.", "bad");
+    return;
+  }
+  if (box) box.value = code;
+  let ok = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(code);
+      ok = true;
+    }
+  } catch (err) { ok = false; }
+  if (!ok && box) {
+    box.focus();
+    box.select();
+    try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
+  }
+  if (status) status.textContent = ok ? "Save code copied to clipboard." : "Copy failed — select the code and copy it manually.";
+  toast(ok ? "Save code copied." : "Select the code and copy it.", ok ? "good" : "info");
+}
+
+function doImportSave() {
+  const box = $("#saveCodeBox");
+  const status = $("#saveStatus");
+  const code = box ? box.value : "";
+  if (!code || !code.trim()) {
+    if (status) status.textContent = "Paste a save code first.";
+    sfx("error");
+    return;
+  }
+  const ok = (typeof importSaveCode === "function") && importSaveCode(code);
+  if (!ok) {
+    if (status) status.textContent = "That save code is not valid.";
+    toast("Invalid save code.", "bad");
+    sfx("error");
+    return;
+  }
+  closeModal();
+  if (typeof reloadGame === "function") reloadGame();
+  toast("Save restored.", "gold");
+}
+
+function resetProgress() {
+  openModal(`<h2>RESET EVERYTHING?</h2>
+    <p>This wipes your current run <b>and</b> your permanent profile — levels, tokens, stars, unlocks and achievements. There is no undo.</p>
+    <div class="modal-actions">
+      <button class="btn btn-red" data-action="confirm-reset">YES, WIPE IT ALL</button>
+      <button class="btn btn-dark" data-action="show-settings">CANCEL</button>
+    </div>`);
+}
+
+function confirmReset() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+  } catch (err) { /* ignore */ }
+  if (typeof defaultProfile === "function") profile = defaultProfile();
+  state = makeState();
+  if (typeof syncStars === "function") syncStars();
+  if (typeof applyTheme === "function") applyTheme();
+  if (typeof recordRunStart === "function") recordRunStart();
+  resetUI();
+  lastCashShown = null;
+  closeModal();
+  const layer = $("#gameoverLayer");
+  if (layer) { layer.hidden = true; layer.innerHTML = ""; }
+  if (typeof saveProfile === "function") saveProfile();
+  saveState();
+  renderAll();
+  startMusic();
+  toast("Everything wiped. Fresh start.", "gold");
 }
 
 function flashScreen() {
@@ -953,8 +1160,8 @@ async function doSleep() {
 function updatePrestigeExpiry() {
   if (!state.prestigeUnlocked && !state.offerExpired && state.day > PRESTIGE_DAY) {
     state.offerExpired = true;
-    addLog("The back-room offer expired. The door is shut for this run.", "loss");
-    toast("The back room offer expired.", "bad");
+    addLog("The back-room offer expired. The Shark's Tithe on Day 20 is still open.", "loss");
+    toast("Back room offer expired — the Tithe still stands.", "bad");
   }
 }
 

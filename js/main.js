@@ -24,6 +24,7 @@ const ACTIONS = {
   "bj-hit": () => bjHit(),
   "bj-stand": () => bjStand(),
   "bj-double": () => bjDouble(),
+  "bj-split": () => bjSplit(),
   "holdem-showdown": () => holdemShowdown(),
   "holdem-fold": () => holdemFold(),
   "horses-pick": el => setHorsePick(el.dataset.index),
@@ -32,6 +33,13 @@ const ACTIONS = {
   "pay-all-debts": () => payAllDebts(),
   "hustle": () => doHustle(),
   "sleep": () => doSleep(),
+  "pay-tithe": () => payTithe(),
+  "open-settings": () => showSettings(),
+  "show-settings": () => showSettings(),
+  "copy-save": () => copySaveCode(),
+  "import-save": () => doImportSave(),
+  "reset-progress": () => resetProgress(),
+  "confirm-reset": () => confirmReset(),
   "restart-run": () => restartRun(),
   "russian-pull": () => russianPull(),
   "russian-cashout": () => cashOutRussian(),
@@ -84,6 +92,21 @@ function onDocumentKeydown(event) {
   }
 }
 
+function onDocumentInput(event) {
+  const el = event.target;
+  if (!el || !el.dataset || !el.dataset.setting) return;
+  const value = clamp(Number(el.value) / 100, 0, 1);
+  if (el.dataset.setting === "music") {
+    if (typeof setMusicVolume === "function") setMusicVolume(value);
+    const out = $("#musicVolOut");
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+  } else if (el.dataset.setting === "sfx") {
+    if (typeof setSfxVolume === "function") setSfxVolume(value);
+    const out = $("#sfxVolOut");
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+  }
+}
+
 function init() {
   profile = loadProfile();
   let hadSave = false;
@@ -100,6 +123,8 @@ function init() {
 
   if (state.prestigeWin > 0) {
     showPrestigeWin(state.prestigeWin);
+  } else if (state.titheWin > 0) {
+    showTitheWin();
   } else if (state.gameOver) {
     showGameOver(state.gameOverReason || "The run ended. The house is patient.");
   } else {
@@ -109,6 +134,7 @@ function init() {
 
   document.addEventListener("click", onDocumentClick);
   document.addEventListener("keydown", onDocumentKeydown);
+  document.addEventListener("input", onDocumentInput);
 
   const modalLayer = $("#modalLayer");
   if (modalLayer) {
@@ -140,6 +166,7 @@ function installDebugAPI() {
   window.PF = {
     save: saveState,
     reload() {
+      if (typeof reloadGame === "function") { reloadGame(); return; }
       profile = loadProfile();
       state = loadState();
       if (typeof syncStars === "function") syncStars();
@@ -236,10 +263,12 @@ function installDebugAPI() {
     },
     unlockAll() {
       if (typeof profile !== "undefined" && profile && typeof VAULT_KINDS === "object") {
-        profile.unlocked = profile.unlocked || {};
+        profile.unlocks = profile.unlocks || {};
         Object.keys(VAULT_KINDS).forEach(kind => {
+          const key = (typeof unlockKey === "function") ? unlockKey(kind) : kind;
+          const list = profile.unlocks[key] || (profile.unlocks[key] = []);
           (typeof vaultList === "function" ? vaultList(kind) : []).forEach(item => {
-            profile.unlocked[`${kind}:${item.id}`] = true;
+            if (!list.includes(item.id)) list.push(item.id);
           });
         });
         if (typeof saveProfile === "function") saveProfile();

@@ -40,8 +40,8 @@ function gameHint(gameId) {
   switch (gameId) {
     case "coin": return `Win chance <b>47.5%</b> plus luck. A win returns <b>2.00x</b> your stake.`;
     case "dice": return `Even or odd on two dice. Win chance <b>48.5%</b> plus luck. Pays <b>1.92x</b>.`;
-    case "blackjack": return `Blackjack pays <b>2.50x</b>. Dealer hits soft 17. Double is available on your first two cards.`;
-    case "roulette": return `Even-money bets pay <b>2x</b>. A single number pays <b>36x</b>. Zero and double-zero are green.`;
+    case "blackjack": return `Blackjack pays <b>2.50x</b>. Dealer hits soft 17. Double, or split matching cards up to <b>4 hands</b>.`;
+    case "roulette": return `Even-money bets pay <b>2x</b>. Dozens and columns pay <b>3x</b>. A single number pays <b>36x</b>. Zero and double-zero are green.`;
     case "holdem": return `Best five-card hand wins the pot. The house takes a <b>5% rake</b> on winning payouts.`;
     case "plinko": return `Twelve rows, thirteen slots. Edges pay <b>50x</b>; the middle can return less than your stake.`;
     case "slots": return `Any pair pays. Triple sevens pay <b>77x</b>. Three reels, one lever, no mercy.`;
@@ -297,21 +297,44 @@ async function playDice() {
 /* ------------------------------------------------------------
    Blackjack
    ------------------------------------------------------------ */
+function makeBjHand(cards, bet) {
+  return { cards: cards.slice(), bet, done: false, doubled: false, blackjack: false, busted: false, result: null };
+}
+
 function renderBlackjackBody() {
   const game = ui.games.blackjack;
   const reveal = game.reveal || game.phase === "done";
   const dealerCards = game.dealer.length
     ? game.dealer.map((card, i) => cardHTML(card, !reveal && i === 1)).join("")
     : "";
-  const playerCards = game.player.map(card => cardHTML(card)).join("");
-  const playerScore = game.player.length ? handValue(game.player).total : 0;
   const dealerVisible = game.dealer.length ? handValue(reveal ? game.dealer : [game.dealer[0]]).total : 0;
   const dealerScore = game.dealer.length ? (reveal ? String(handValue(game.dealer).total) : `${dealerVisible} + ?`) : "—";
-  const canDouble = game.phase === "player" && game.player.length === 2 && state.cash >= game.bet;
+
+  const hands = game.hands || [];
+  const handBlocks = hands.map((hand, i) => {
+    const value = handValue(hand.cards);
+    const active = game.phase === "player" && i === game.activeHand;
+    const resultTag = hand.result
+      ? `<span class="hand-result ${hand.result.type}">${hand.result.type === "win" ? "WIN" : hand.result.type === "push" ? "PUSH" : "LOSS"}</span>`
+      : "";
+    const badge = hand.blackjack ? `<span class="hand-name-badge">BLACKJACK</span>` : "";
+    const label = hands.length > 1 ? `HAND ${i + 1}` : "YOU";
+    return `<div class="hand-block ${active ? "active-hand" : ""} ${hand.done && game.phase === "player" ? "hand-done" : ""}">
+      <div class="hand-label">${label} ${badge}<span class="score">${value.total || "—"}</span>${resultTag}</div>
+      <div class="hand-cards">${hand.cards.map(card => cardHTML(card)).join("")}</div>
+    </div>`;
+  }).join("");
+
+  const activeHand = hands[game.activeHand];
+  const canDouble = game.phase === "player" && activeHand && activeHand.cards.length === 2 && !activeHand.doubled && state.cash >= activeHand.bet;
+  const canSplit = game.phase === "player" && activeHand && activeHand.cards.length === 2
+    && activeHand.cards[0].rank === activeHand.cards[1].rank
+    && hands.length < 4 && state.cash >= activeHand.bet;
   const actions = game.phase === "player" ? `<div class="card-actions">
     <button class="btn btn-green" data-action="bj-hit">HIT</button>
     <button class="btn btn-gold" data-action="bj-stand">STAND</button>
     <button class="btn btn-dark" data-action="bj-double" ${canDouble ? "" : "disabled"}>DOUBLE</button>
+    <button class="btn btn-cyan" data-action="bj-split" ${canSplit ? "" : "disabled"}>SPLIT</button>
   </div>` : "";
 
   return `<div class="felt blackjack-table">
@@ -321,12 +344,9 @@ function renderBlackjackBody() {
       <div class="hand-cards">${dealerCards}</div>
     </div>
     <div class="bj-status">${game.status || "Place your bet and deal."}</div>
-    <div class="hand-block">
-      <div class="hand-label">YOU <span class="score">${playerScore || "—"}</span></div>
-      <div class="hand-cards">${playerCards}</div>
-    </div>
+    ${handBlocks}
     ${actions}
-    <div class="bj-rule">BLACKJACK 2.50x • WIN 2.00x • PUSH RETURNS STAKE</div>
+    <div class="bj-rule">BLACKJACK 2.5x • WIN 2x • PUSH RETURNS STAKE • SPLIT UP TO 4 HANDS</div>
   </div>`;
 }
 
@@ -341,25 +361,26 @@ function bjDeal() {
 
   game.phase = "player";
   game.deck = newDeck();
-  game.player = [game.deck.pop(), game.deck.pop()];
+  game.hands = [makeBjHand([game.deck.pop(), game.deck.pop()], bet)];
   game.dealer = [game.deck.pop(), game.deck.pop()];
+  game.activeHand = 0;
   game.result = null;
-  game.bet = bet;
   game.reveal = false;
-  game.playerNatural = handValue(game.player).total === 21;
-  game.dealerNatural = handValue(game.dealer).total === 21;
   game.status = "Your move. Hit or stand.";
+  const playerNatural = handValue(game.hands[0].cards).total === 21;
+  game.hands[0].blackjack = playerNatural;
+  game.dealerNatural = handValue(game.dealer).total === 21;
   sfx("deal");
   saveState();
   renderAll();
 
-  if (game.playerNatural || game.dealerNatural) {
+  if (playerNatural || game.dealerNatural) {
     ui.busy = true;
-    setTimeout(() => {
+    const token = ++game.settleToken;
+    game.naturalTimer = setTimeout(() => {
+      if (game.settleToken !== token) return;
       ui.busy = false;
-      if (game.playerNatural && game.dealerNatural) bjFinish("push", "Both naturals. Push.");
-      else if (game.playerNatural) bjFinish("blackjack", "Natural blackjack.");
-      else bjFinish("dealerBlackjack", "The dealer had blackjack.");
+      bjSettleHands();
     }, REDUCED_MOTION ? 120 : 650);
   }
 }
@@ -367,38 +388,113 @@ function bjDeal() {
 function bjHit() {
   const game = ui.games.blackjack;
   if (ui.busy || game.phase !== "player") return;
-  game.player.push(game.deck.pop());
+  const hand = game.hands[game.activeHand];
+  if (!hand || hand.done) return;
+  hand.cards.push(game.deck.pop());
   sfx("deal");
-  const value = handValue(game.player);
+  const value = handValue(hand.cards);
   if (value.total > 21) {
-    game.reveal = true;
-    game.status = "Bust. The house smiles.";
-    bjFinish("loss", `You busted on ${value.total}.`);
+    hand.busted = true;
+    hand.done = true;
+    game.status = `Hand ${game.activeHand + 1} busts on ${value.total}.`;
+    renderAll();
+    bjAdvance();
     return;
   }
   if (value.total === 21) {
-    game.status = "Twenty-one. Standing.";
-    renderStage();
-    bjStand();
+    hand.done = true;
+    game.status = `Hand ${game.activeHand + 1} stands on 21.`;
+    renderAll();
+    bjAdvance();
     return;
   }
-  game.status = `You show ${value.total}. Hit or stand.`;
+  game.status = `Hand ${game.activeHand + 1} shows ${value.total}. Hit or stand.`;
   renderStage();
 }
 
 function bjStand() {
   const game = ui.games.blackjack;
   if (ui.busy || game.phase !== "player") return;
+  const hand = game.hands[game.activeHand];
+  if (!hand) return;
+  hand.done = true;
+  sfx("deal");
+  renderAll();
+  bjAdvance();
+}
+
+function bjDouble() {
+  const game = ui.games.blackjack;
+  if (ui.busy || game.phase !== "player") return;
+  const hand = game.hands[game.activeHand];
+  if (!hand || hand.cards.length !== 2 || hand.doubled) return;
+  if (state.cash < hand.bet) {
+    toast("Not enough cash to double.", "bad");
+    sfx("error");
+    return;
+  }
+  state.cash -= hand.bet;
+  hand.bet *= 2;
+  hand.doubled = true;
+  hand.cards.push(game.deck.pop());
+  sfx("deal");
+  const value = handValue(hand.cards);
+  if (value.total > 21) hand.busted = true;
+  hand.done = true;
+  game.status = `Hand ${game.activeHand + 1} doubled to ${fmt(hand.bet)}${hand.busted ? ` — bust on ${value.total}` : ` showing ${value.total}`}.`;
+  renderAll();
+  bjAdvance();
+}
+
+function bjSplit() {
+  const game = ui.games.blackjack;
+  if (ui.busy || game.phase !== "player") return;
+  const hand = game.hands[game.activeHand];
+  if (!hand || hand.cards.length !== 2) return;
+  if (hand.cards[0].rank !== hand.cards[1].rank) return;
+  if (game.hands.length >= 4) { toast("Four hands maximum.", "bad"); sfx("error"); return; }
+  if (state.cash < hand.bet) { toast("Not enough cash to split.", "bad"); sfx("error"); return; }
+  state.cash -= hand.bet;
+  const moved = hand.cards.pop();
+  const newHand = makeBjHand([moved], hand.bet);
+  hand.cards.push(game.deck.pop());
+  newHand.cards.push(game.deck.pop());
+  game.hands.splice(game.activeHand + 1, 0, newHand);
+  sfx("deal");
+  if (hand.cards[0].rank === 14) {
+    hand.done = true;
+    newHand.done = true;
+    game.status = "Split aces. One card each.";
+    renderAll();
+    bjAdvance();
+    return;
+  }
+  game.status = "Split. Playing the first hand.";
+  renderAll();
+}
+
+function bjAdvance() {
+  const game = ui.games.blackjack;
+  if (game.phase !== "player") return;
+  const next = game.hands.findIndex(h => !h.done);
+  if (next === -1) {
+    bjDealerPlay();
+    return;
+  }
+  game.activeHand = next;
+  const value = handValue(game.hands[next].cards);
+  game.status = `Hand ${next + 1} shows ${value.total}. Hit or stand.`;
+  renderStage();
+}
+
+async function bjDealerPlay() {
+  const game = ui.games.blackjack;
+  if (game.phase === "done") return;
   game.phase = "dealer";
   game.reveal = true;
   game.status = "Dealer draws...";
   sfx("deal");
   renderAll();
-  bjDealerPlay();
-}
-
-async function bjDealerPlay() {
-  const game = ui.games.blackjack;
   ui.busy = true;
   await wait(REDUCED_MOTION ? 100 : 550);
   while (true) {
@@ -413,71 +509,68 @@ async function bjDealerPlay() {
     if (game.dealer.length > 10) break;
   }
   ui.busy = false;
-  const player = handValue(game.player).total;
+  bjSettleHands();
+}
+
+function bjSettleHands() {
+  const game = ui.games.blackjack;
+  if (game.phase === "done") return;
   const dealer = handValue(game.dealer).total;
-  if (dealer > 21) bjFinish("win", `Dealer busts on ${dealer}.`);
-  else if (player > dealer) bjFinish("win", `${player} beats ${dealer}.`);
-  else if (player < dealer) bjFinish("loss", `${dealer} beats ${player}.`);
-  else bjFinish("push", `Both stand on ${player}.`);
-}
+  const dealerBust = dealer > 21;
+  let totalBet = 0;
+  let totalPayout = 0;
+  let wins = 0;
+  let losses = 0;
+  let pushes = 0;
+  let naturalWin = false;
 
-function bjDouble() {
-  const game = ui.games.blackjack;
-  if (ui.busy || game.phase !== "player" || game.player.length !== 2) return;
-  if (state.cash < game.bet) {
-    toast("Not enough cash to double.", "bad");
-    sfx("error");
-    return;
-  }
-  state.cash -= game.bet;
-  game.bet *= 2;
-  game.player.push(game.deck.pop());
-  sfx("deal");
-  const value = handValue(game.player);
-  if (value.total > 21) {
-    game.reveal = true;
-    bjFinish("loss", `Double bust on ${value.total}.`);
-    return;
-  }
-  game.status = `Doubled to ${fmt(game.bet)}. Showing ${value.total}.`;
-  renderStage();
-  bjStand();
-}
-
-function bjFinish(kind, note = "") {
-  const game = ui.games.blackjack;
-  const bet = game.bet || 0;
-  let payout = 0;
-  let type = "loss";
-  let title = "YOU LOSE";
-  let sub = note || "The dealer takes it.";
-
-  if (kind === "push") {
-    payout = bet;
-    type = "push";
-    title = "PUSH";
-    sub = note || "Stake returned. Nobody wins.";
-  } else if (kind === "blackjack") {
-    payout = bet * 2.5 * payoutBonusFor("blackjack");
-    type = "win";
-    title = "BLACKJACK!";
-    sub = note || "Natural 21 pays 3:2.";
-  } else if (kind === "dealerBlackjack") {
-    payout = 0;
-    type = "loss";
-    title = "DEALER BLACKJACK";
-    sub = note || "The house had it all along.";
-  } else if (kind === "win") {
-    payout = bet * 2 * payoutBonusFor("blackjack");
-    type = "win";
-    title = "YOU WIN";
-    sub = note || "Your hand is better.";
-  }
+  game.hands.forEach(hand => {
+    const value = handValue(hand.cards);
+    totalBet += hand.bet;
+    let type = "loss";
+    let payout = 0;
+    if (hand.busted || value.total > 21) {
+      type = "loss";
+    } else if (hand.blackjack) {
+      if (game.dealerNatural) { type = "push"; payout = hand.bet; }
+      else { type = "win"; payout = hand.bet * 2.5 * payoutBonusFor("blackjack"); naturalWin = true; }
+    } else if (game.dealerNatural) {
+      type = "loss";
+    } else if (dealerBust || value.total > dealer) {
+      type = "win";
+      payout = hand.bet * 2 * payoutBonusFor("blackjack");
+    } else if (value.total < dealer) {
+      type = "loss";
+    } else {
+      type = "push";
+      payout = hand.bet;
+    }
+    hand.result = { type, payout };
+    if (type === "win") wins += 1;
+    else if (type === "push") pushes += 1;
+    else losses += 1;
+    totalPayout += payout;
+  });
 
   game.phase = "done";
   game.reveal = true;
+  const net = totalPayout - totalBet;
+  const type = net > 0 ? "win" : net < 0 ? "loss" : "push";
+
+  let title;
+  if (naturalWin) title = "BLACKJACK!";
+  else if (type === "win") title = wins > 1 ? `${wins} HANDS WIN` : "YOU WIN";
+  else if (type === "push") title = "PUSH";
+  else title = losses > 1 ? "BOTH HANDS LOSE" : "YOU LOSE";
+
+  const parts = [];
+  if (wins) parts.push(`${wins} win${wins === 1 ? "" : "s"}`);
+  if (pushes) parts.push(`${pushes} push${pushes === 1 ? "" : "es"}`);
+  if (losses) parts.push(`${losses} loss${losses === 1 ? "" : "es"}`);
+  const sub = `Dealer ${dealerBust ? `busts on ${dealer}` : `stands on ${dealer}`} — ${parts.join(", ")}.`;
+
   game.status = sub;
-  settleGame("blackjack", { bet, payout, type, title, sub });
+  settleGame("blackjack", { bet: totalBet, payout: totalPayout, type, title, sub });
 }
 
 /* ------------------------------------------------------------
@@ -711,14 +804,35 @@ const ROULETTE_OUTSIDE = [
   { id: "high", label: "19–36", pay: 2 }
 ];
 
+const ROULETTE_DOZENS = [
+  { id: "dozen1", label: "1–12", min: 1, max: 12 },
+  { id: "dozen2", label: "13–24", min: 13, max: 24 },
+  { id: "dozen3", label: "25–36", min: 25, max: 36 }
+];
+
+const ROULETTE_COLUMNS = [
+  { id: "col1", label: "COL 1", mod: 1 },
+  { id: "col2", label: "COL 2", mod: 2 },
+  { id: "col3", label: "COL 3", mod: 0 }
+];
+
+function rouletteDozen(game) { return ROULETTE_DOZENS.find(d => d.id === game.betType) || null; }
+function rouletteColumn(game) { return ROULETTE_COLUMNS.find(c => c.id === game.betType) || null; }
+
 function rouletteBetLabel(game) {
   if (game.betType === "number") return `NUMBER ${pocketLabel(game.number)}`;
+  const dozen = rouletteDozen(game);
+  if (dozen) return `DOZEN ${dozen.label}`;
+  const column = rouletteColumn(game);
+  if (column) return column.label;
   const found = ROULETTE_OUTSIDE.find(bet => bet.id === game.betType);
   return found ? found.label : "RED";
 }
 
 function rouletteMultiplier(game) {
-  return game.betType === "number" ? 36 : 2;
+  if (game.betType === "number") return 36;
+  if (rouletteDozen(game) || rouletteColumn(game)) return 3;
+  return 2;
 }
 
 function rouletteFavorable(game) {
@@ -729,6 +843,10 @@ function rouletteFavorable(game) {
   if (game.betType === "odd") return WHEEL_ORDER.filter(p => p !== 0 && p !== 37 && p % 2 === 1);
   if (game.betType === "low") return WHEEL_ORDER.filter(p => p >= 1 && p <= 18);
   if (game.betType === "high") return WHEEL_ORDER.filter(p => p >= 19 && p <= 36);
+  const dozen = rouletteDozen(game);
+  if (dozen) return WHEEL_ORDER.filter(p => p >= dozen.min && p <= dozen.max);
+  const column = rouletteColumn(game);
+  if (column) return WHEEL_ORDER.filter(p => p >= 1 && p <= 36 && p % 3 === column.mod);
   return [];
 }
 
@@ -741,6 +859,10 @@ function rouletteWins(game, pocket) {
   if (game.betType === "odd") return pocket !== 0 && pocket !== 37 && pocket % 2 === 1;
   if (game.betType === "low") return pocket >= 1 && pocket <= 18;
   if (game.betType === "high") return pocket >= 19 && pocket <= 36;
+  const dozen = rouletteDozen(game);
+  if (dozen) return pocket >= dozen.min && pocket <= dozen.max;
+  const column = rouletteColumn(game);
+  if (column) return pocket >= 1 && pocket <= 36 && pocket % 3 === column.mod;
   return false;
 }
 
@@ -773,6 +895,12 @@ function renderRouletteBody() {
         }).join("")}
       </div>
       <div class="roulette-numbers">${numberCells.join("")}</div>
+      <div class="roulette-outside roulette-dozens">
+        ${ROULETTE_DOZENS.map(d => `<button class="outside-btn dozen-btn ${game.betType === d.id ? "selected" : ""}" data-action="roulette-bet" data-bet="${d.id}" ${locked ? "disabled" : ""}>${d.label}</button>`).join("")}
+      </div>
+      <div class="roulette-outside roulette-columns">
+        ${ROULETTE_COLUMNS.map(c => `<button class="outside-btn column-btn ${game.betType === c.id ? "selected" : ""}" data-action="roulette-bet" data-bet="${c.id}" ${locked ? "disabled" : ""}>${c.label}</button>`).join("")}
+      </div>
       <div class="bet-readout">
         <span>BET <b>${rouletteBetLabel(game)}</b></span>
         <span>PAYS <b>${rouletteMultiplier(game)}x</b></span>

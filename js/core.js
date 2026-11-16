@@ -19,8 +19,9 @@ function makeGameStates() {
     coin: { choice: "HEADS", phase: "idle", result: null, lastFace: "HEADS" },
     dice: { choice: "EVEN", values: [2, 5], phase: "idle", result: null },
     blackjack: {
-      phase: "idle", deck: [], player: [], dealer: [], result: null,
-      bet: 0, reveal: false, playerNatural: false, dealerNatural: false, status: ""
+      phase: "idle", deck: [], hands: [], dealer: [], result: null,
+      activeHand: 0, reveal: false, dealerNatural: false, status: "",
+      settleToken: 0, naturalTimer: null
     },
     roulette: {
       phase: "idle", betType: "red", number: 7, rotation: 0,
@@ -64,7 +65,8 @@ function maxEnergy(s = state) {
   const level = s.upgradeLevels?.energy || 0;
   const starBonus = Math.min(10, s.prestige?.stars || 0) * 4;
   const perkBonus = perkLevel("warmBed") * 3;
-  return BASE_ENERGY + level * 4 + starBonus + perkBonus;
+  const modBonus = (typeof runModTotal === "function") ? runModTotal("energy", s) : 0;
+  return Math.max(1, BASE_ENERGY + level * 4 + starBonus + perkBonus + modBonus);
 }
 
 function payoutBonus(s = state) {
@@ -72,7 +74,8 @@ function payoutBonus(s = state) {
   const level = s.upgradeLevels?.payout || 0;
   const stars = Math.min(10, s.prestige?.stars || 0);
   const perkBonus = perkLevel("goldPlate") * 0.03;
-  return 1 + level * 0.05 + stars * 0.04 + perkBonus;
+  const modBonus = (typeof runModTotal === "function") ? runModTotal("payout", s) : 0;
+  return Math.max(0, 1 + level * 0.05 + stars * 0.04 + perkBonus + modBonus);
 }
 
 /* Payout multiplier for one cabinet, including temporary floor effects. */
@@ -95,7 +98,8 @@ function luckBonus(s = state) {
   const upgrade = (s.upgradeLevels?.luck || 0) * 0.015;
   const perk = perkLevel("luckyCharm") * 0.012;
   const effect = (typeof effectLuckPct === "function") ? effectLuckPct(s) : 0;
-  return upgrade + perk + effect;
+  const modLuck = (typeof runModTotal === "function") ? runModTotal("luck", s) : 0;
+  return upgrade + perk + effect + modLuck;
 }
 
 function debtModifier(s = state) {
@@ -103,7 +107,8 @@ function debtModifier(s = state) {
   const upgrade = 1 - (s.upgradeLevels?.debt || 0) * 0.12;
   const perk = 1 - perkLevel("silverTongue") * 0.08;
   const effect = (typeof effectDebtMult === "function") ? effectDebtMult(s) : 1;
-  return Math.max(0.2, upgrade * perk * effect);
+  const modMult = 1 + ((typeof runModTotal === "function") ? runModTotal("debt", s) : 0);
+  return Math.max(0.2, upgrade * perk * effect * modMult);
 }
 
 function totalDebt(s = state) {
@@ -148,7 +153,12 @@ function makeState(options = {}) {
   const runs = Math.max(0, Math.floor(Number(options.runs) || 0));
   const stats = { ...statsDefaults(), ...(options.stats || {}) };
   const headStart = (typeof perkLevel === "function" ? perkLevel("headStart") : 0) * 100;
-  const startCash = START_CASH + Math.min(stars, 20) * 50 + headStart;
+  const modifiers = (typeof rollRunModifiers === "function") ? rollRunModifiers() : [];
+  const modCash = modifiers.reduce((sum, id) => {
+    const mod = (typeof modifierById === "function") ? modifierById(id) : null;
+    return sum + (mod?.startCash || 0);
+  }, 0);
+  const startCash = START_CASH + Math.min(stars, 20) * 50 + headStart + modCash;
   const s = {
     version: SAVE_VERSION,
     cash: startCash,
@@ -166,13 +176,17 @@ function makeState(options = {}) {
     prestigeUnlocked: false,
     offerExpired: false,
     prestigeWin: 0,
+    titheWin: 0,
     russian: { remaining: 6, earned: 0, pulled: 0 },
     runStats: (typeof defaultRunStats === "function") ? defaultRunStats() : null,
     effects: [],
+    modifiers,
     challenges: (typeof rollRunChallenges === "function") ? rollRunChallenges() : [],
     stats,
     sound: options.sound !== false,
     music: options.music !== false,
+    musicVolume: 1,
+    sfxVolume: 1,
     gameOver: false,
     gameOverReason: "",
     log: [],
@@ -187,7 +201,7 @@ function makeState(options = {}) {
 }
 
 function issueDebtFor(s, day, silent = false) {
-  const base = 22 + day * 4 + randInt(0, 28);
+  const base = 20 + day * 3 + randInt(0, 20);
   const amount = Math.max(10, Math.round((base * debtModifier(s)) / 5) * 5);
   const note = {
     id: `bill-${day}-${Date.now()}-${randInt(100, 999)}`,
@@ -252,10 +266,13 @@ function loadState() {
     s.prestigeUnlocked = !!p.prestigeUnlocked;
     s.offerExpired = !!p.offerExpired;
     s.prestigeWin = Math.max(0, Math.floor(num(p.prestigeWin, 0)));
+    s.titheWin = Math.max(0, Math.floor(num(p.titheWin, 0)));
     s.gameOver = !!p.gameOver;
     s.gameOverReason = typeof p.gameOverReason === "string" ? p.gameOverReason : "";
     s.sound = p.sound !== false;
     s.music = p.music !== false;
+    s.musicVolume = clamp(num(p.musicVolume, 1), 0, 1);
+    s.sfxVolume = clamp(num(p.sfxVolume, 1), 0, 1);
     s.startedAt = num(p.startedAt, Date.now());
 
     if (p.upgradeLevels && typeof p.upgradeLevels === "object") {
@@ -295,7 +312,7 @@ function loadState() {
         }))
         .sort((a, b) => a.dueDay - b.dueDay);
     }
-    if (!s.debts.length && !s.gameOver && !s.prestigeWin) issueDebtFor(s, s.day, true);
+    if (!s.debts.length && !s.gameOver && !s.prestigeWin && !s.titheWin) issueDebtFor(s, s.day, true);
 
     if (p.russian && typeof p.russian === "object") {
       s.russian.remaining = clamp(Math.floor(num(p.russian.remaining, 6)), 1, 6);
@@ -315,6 +332,12 @@ function loadState() {
           .filter(c => c && typeof c.id === "string" && knownContract(c.id))
           .map(c => ({ id: c.id, done: !!c.done }))
       : rollRunChallenges();
+
+    if (Array.isArray(p.modifiers)) {
+      const knownMod = (typeof modifierById === "function") ? modifierById : () => null;
+      const kept = p.modifiers.filter(id => typeof id === "string" && knownMod(id));
+      if (kept.length) s.modifiers = kept;
+    }
 
     if (p.bets && typeof p.bets === "object") {
       GAMES.forEach(game => {
@@ -654,10 +677,9 @@ function musicLoopLength() {
 
 function musicTargetVolume() {
   const cfg = gameTrackConfig();
-  if (cfg) return 0.1;
-  if (musicTrack === "backroom") return 0.095;
-  if (musicTrack === "lobby") return 0.105;
-  return 0.11;
+  const base = cfg ? 0.1 : musicTrack === "backroom" ? 0.095 : musicTrack === "lobby" ? 0.105 : 0.11;
+  const vol = clamp(Number(state?.musicVolume ?? 1), 0, 1);
+  return base * vol;
 }
 
 function syncMusic() {
@@ -1196,7 +1218,9 @@ function noise(duration = 0.12, volume = 0.04, delay = 0) {
 
 function sfx(name, scale = 1) {
   if (!state || state.sound === false) return;
-  const v = clamp(scale, 0.1, 1.4);
+  const master = clamp(Number(state.sfxVolume ?? 1), 0, 1);
+  if (master <= 0) return;
+  const v = clamp(scale, 0.1, 1.4) * master;
   switch (name) {
     case "click":
       tone(240, 0.035, "square", 0.022 * v, 180);
@@ -1282,6 +1306,74 @@ function toggleMusic() {
   saveState();
   if (state.sound) sfx("click", 0.7);
   renderHUD();
+}
+
+function setMusicVolume(value) {
+  if (!state) return;
+  state.musicVolume = clamp(Number(value) || 0, 0, 1);
+  saveState();
+  if (state.musicVolume <= 0) {
+    stopMusic();
+    return;
+  }
+  if (!state.music) return;
+  if (musicGainNode && audioCtx && musicTimer) {
+    const now = audioCtx.currentTime;
+    musicGainNode.gain.cancelScheduledValues(now);
+    musicGainNode.gain.setValueAtTime(Math.max(0.0001, musicGainNode.gain.value), now);
+    musicGainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, musicTargetVolume()), now + 0.15);
+  } else {
+    startMusic();
+  }
+}
+
+function setSfxVolume(value) {
+  if (!state) return;
+  state.sfxVolume = clamp(Number(value) || 0, 0, 1);
+  saveState();
+  if (state.sfxVolume > 0) sfx("click", 0.7);
+}
+
+/* ------------------------------------------------------------
+   Save codes: export and restore run + profile
+   ------------------------------------------------------------ */
+function exportSaveCode() {
+  try {
+    const payload = { v: 1, exportedAt: Date.now(), state, profile };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  } catch (err) {
+    return "";
+  }
+}
+
+function importSaveCode(code) {
+  try {
+    const clean = String(code || "").trim().replace(/\s+/g, "");
+    if (!clean) return false;
+    const json = decodeURIComponent(escape(atob(clean)));
+    const payload = JSON.parse(json);
+    if (!payload || typeof payload !== "object") return false;
+    if (!payload.state && !payload.profile) return false;
+    if (payload.state && typeof payload.state === "object") {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload.state));
+    }
+    if (payload.profile && typeof payload.profile === "object") {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(payload.profile));
+    }
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function reloadGame() {
+  profile = loadProfile();
+  state = loadState();
+  if (typeof syncStars === "function") syncStars();
+  if (typeof applyTheme === "function") applyTheme();
+  resetUI();
+  lastCashShown = null;
+  renderAll();
 }
 
 /* ------------------------------------------------------------

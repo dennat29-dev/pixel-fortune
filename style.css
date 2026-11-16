@@ -411,6 +411,27 @@ button:focus-visible, [tabindex]:focus-visible {
 .rail-btn-icon { width: 28px; height: 28px; display: inline-flex; }
 .rail-arrow { color: var(--muted); }
 .rail-btn.backroom.unlocked .rail-arrow { color: var(--red); }
+.rail-btn.shop {
+  border-color: #8a6a1e;
+  background: linear-gradient(180deg, #3a2f12, #1f1808);
+  box-shadow: 0 3px 0 #04050b, 0 0 16px rgba(255, 207, 74, 0.16);
+}
+.rail-btn.shop:hover {
+  transform: translateY(-1px);
+  border-color: var(--gold);
+  box-shadow: 0 3px 0 #04050b, 0 0 24px rgba(255, 207, 74, 0.32);
+}
+.rail-btn.shop .rail-btn-icon { filter: drop-shadow(0 0 6px rgba(255, 207, 74, 0.55)); }
+.rail-btn.shop b { color: var(--gold); }
+.rail-btn.shop small { color: #d9c98a; }
+.rail-btn.shop .rail-arrow { color: var(--gold); animation: railNudge 1.6s ease-in-out infinite; }
+@keyframes railNudge {
+  0%, 100% { transform: translateX(0); opacity: 0.8; }
+  50% { transform: translateX(3px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-btn.shop .rail-arrow { animation: none; }
+}
 .prestige-mini {
   margin-top: auto;
   border: 2px dashed #463d68;
@@ -1342,6 +1363,20 @@ button:focus-visible, [tabindex]:focus-visible {
   text-align: center;
   letter-spacing: 0.5px;
 }
+.hand-block.active-hand { border: 2px dashed rgba(255,207,74,0.45); background: rgba(255,207,74,0.05); padding: 6px 8px; }
+.hand-block.active-hand .hand-label { color: var(--gold); }
+.hand-block.hand-done { opacity: 0.6; }
+.hand-block.hand-done .hand-label { color: var(--muted); }
+.hand-result {
+  font-family: var(--font-display);
+  font-size: 6px;
+  line-height: 1.7;
+  border: 1px solid currentColor;
+  padding: 2px 5px;
+}
+.hand-result.win { color: var(--green); }
+.hand-result.loss { color: var(--red); }
+.hand-result.push { color: var(--muted); }
 
 .community-row { display: flex; align-items: center; justify-content: center; gap: 0; min-height: 108px; }
 .community-row .playing-card { flex: 0 0 67px; width: 67px; height: 98px; margin-left: -10px; }
@@ -1415,6 +1450,10 @@ button:focus-visible, [tabindex]:focus-visible {
 .outside-btn.black-bet { color: #b6bcda; }
 .outside-btn.green-bet { color: #7ff5ad; border-color: #24583b; }
 .outside-btn:disabled { opacity: 0.4; }
+.roulette-outside.roulette-dozens .outside-btn { color: #cbd2f0; border-color: #2f5f6d; }
+.roulette-outside.roulette-columns .outside-btn { color: #cbd2f0; border-color: #4a4272; }
+.roulette-outside.roulette-dozens .outside-btn.selected,
+.roulette-outside.roulette-columns .outside-btn.selected { border-color: var(--gold); color: var(--gold-hot); }
 .roulette-numbers {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -2453,6 +2492,93 @@ button:focus-visible, [tabindex]:focus-visible {
   padding: 3px 6px 3px 3px;
 }
 .effect-chip svg { width: 15px; height: 15px; display: block; }
+
+/* ============================================================
+   HOUSE RULES (RUN MODIFIERS)
+   ============================================================ */
+.panel.modifier-panel { border-color: #2f6a4a; background: linear-gradient(180deg, rgba(21, 74, 48, 0.18), #0d1020); }
+.modifier-list { display: flex; flex-direction: column; gap: 6px; }
+.modifier {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 7px;
+  align-items: start;
+  background: #0d1020;
+  border: 1px solid #333a5e;
+  padding: 6px 7px;
+}
+.modifier.good { border-color: #2f6a4a; background: rgba(21, 74, 48, 0.16); }
+.modifier.mixed { border-color: #5c4a25; background: rgba(60, 44, 12, 0.16); }
+.modifier.risky { border-color: #7a2c3f; background: rgba(122, 44, 63, 0.18); }
+.modifier-icon { width: 22px; height: 22px; display: inline-flex; margin-top: 1px; }
+.modifier-copy { min-width: 0; }
+.modifier-name { font-family: var(--font-display); font-size: 6px; color: var(--gold); line-height: 1.7; }
+.modifier.good .modifier-name { color: var(--green); }
+.modifier.risky .modifier-name { color: #ff9eb1; }
+.modifier-desc { color: var(--muted); font-size: 15px; line-height: 1.05; margin-top: 2px; }
+
+/* ============================================================
+   THE SHARK'S TITHE
+   ============================================================ */
+.panel.tithe-panel { border-color: #5c4a25; }
+.panel.tithe-panel.ready { border-color: var(--gold); box-shadow: 0 0 18px rgba(255, 207, 74, 0.18), 0 3px 0 #04050b; }
+.panel.tithe-panel.won { border-color: #2f6a4a; }
+.tithe-reqs { display: flex; flex-direction: column; gap: 3px; margin: 7px 0; }
+.tithe-req {
+  font-family: var(--font-display);
+  font-size: 6px;
+  line-height: 1.7;
+  color: var(--muted-2);
+  border: 1px solid #333a5e;
+  padding: 3px 6px;
+}
+.tithe-req.met { color: var(--green); border-color: #2f6a4a; }
+.tithe-rewards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 14px 0; }
+.tithe-reward {
+  border: 2px solid #5c4a25;
+  background: rgba(60, 44, 12, 0.3);
+  padding: 8px 14px;
+  text-align: center;
+  box-shadow: 0 3px 0 #03040a;
+}
+.tithe-reward span { display: block; font-family: var(--font-display); font-size: 6px; color: var(--muted-2); line-height: 1.8; }
+.tithe-reward b { display: block; font-family: var(--font-display); font-size: 12px; color: var(--gold); }
+
+/* ============================================================
+   SETTINGS MODAL
+   ============================================================ */
+.modal.settings-modal { border-color: #4a5488; max-width: 560px; }
+.settings-block { border: 2px solid #2c3253; background: #0d1020; padding: 10px; margin-top: 10px; }
+.settings-block.danger { border-color: #7a2c3f; background: rgba(122, 44, 63, 0.14); }
+.settings-title { font-family: var(--font-display); font-size: 7px; color: var(--gold); letter-spacing: 1px; margin-bottom: 8px; }
+.settings-block.danger .settings-title { color: var(--red); }
+.settings-note { color: var(--muted); font-size: 15px; line-height: 1.08; margin-bottom: 8px; }
+.settings-row { display: grid; grid-template-columns: 88px 1fr 48px; gap: 10px; align-items: center; margin-bottom: 9px; }
+.settings-row label { font-family: var(--font-display); font-size: 6px; color: var(--text); }
+.settings-row > span { font-family: var(--font-display); font-size: 6px; color: var(--gold); text-align: right; }
+.settings-row input[type="range"] { width: 100%; accent-color: var(--gold); cursor: pointer; }
+.save-code {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  background: #05070d;
+  color: var(--muted);
+  border: 2px solid #333a5e;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.1;
+  padding: 8px;
+  word-break: break-all;
+}
+.save-code:focus { outline: none; border-color: var(--gold); color: var(--text); }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.settings-status { color: var(--green); font-size: 14px; min-height: 18px; margin-top: 6px; }
+
+/* ============================================================
+   TOPBAR SETTINGS ICON
+   ============================================================ */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; }
+.icon-btn .px-icon { width: 20px; height: 20px; display: block; }
 
 /* ============================================================
    LORE PANEL (LOBBY)
