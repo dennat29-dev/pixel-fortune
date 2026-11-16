@@ -67,6 +67,8 @@ function defaultProfile() {
     unlocks: { themes: ["neon"], skins: ["dealer"], dice: ["classic"], cards: ["classic"] },
     equipped: { theme: "neon", skin: "dealer", dice: "classic", cards: "classic" },
     perks: {},
+    starSpent: 0,
+    starUpgrades: {},
     lifetime: defaultLifetime()
   };
 }
@@ -99,6 +101,8 @@ function loadProfile() {
   merged.unlocks = { ...base.unlocks, ...(p.unlocks || {}) };
   merged.equipped = { ...base.equipped, ...(p.equipped || {}) };
   merged.perks = { ...base.perks, ...(p.perks || {}) };
+  merged.starUpgrades = { ...base.starUpgrades, ...(p.starUpgrades || {}) };
+  merged.starSpent = Math.max(0, Math.floor(Number(p.starSpent) || 0));
   merged.lifetime = { ...base.lifetime, ...(p.lifetime || {}) };
   merged.achievements = (p.achievements && typeof p.achievements === "object") ? p.achievements : {};
   ["themes", "skins", "dice", "cards"].forEach(kind => {
@@ -354,6 +358,64 @@ const PERKS = {
 };
 
 const VAULT_KINDS = { theme: THEMES, skin: SKINS, dice: DICE_DESIGNS, cards: CARD_DESIGNS };
+
+/* ------------------------------------------------------------
+   THE STAR MARKET — spend prestige stars on permanent favors.
+   Stars are spent from a balance; lifetime stars (tiers/power)
+   never go down when you buy something.
+   ------------------------------------------------------------ */
+const STAR_MARKET = [
+  { id: "extraChamber", name: "SEVENTH CHAMBER", icon: "revolver", cost: 6,
+    desc: "The revolver holds seven chambers instead of six — better odds at the back-room table." },
+  { id: "coldCash", name: "COLD HARD CASH", icon: "cash", cost: 4,
+    desc: "Begin every run with an extra $400." },
+  { id: "bigLungs", name: "BIG LUNGS", icon: "bolt", cost: 5,
+    desc: "Permanent +8 max energy, every run." },
+  { id: "goldenTouch", name: "GOLDEN TOUCH", icon: "coin", cost: 7,
+    desc: "Permanent +5% payouts." },
+  { id: "fourLeaf", name: "FOUR-LEAF", icon: "clover", cost: 6,
+    desc: "Permanent +3% win odds on coin, dice and roulette." },
+  { id: "debtForgiven", name: "FIRST ONE FREE", icon: "shark", cost: 5,
+    desc: "The first bill of every run is wiped from the ledger." },
+  { id: "doubleShift", name: "DOUBLE SHIFT", icon: "coin", cost: 5,
+    desc: "The side hustle pays double and can be worked twice a day." },
+  { id: "secondChance", name: "SECOND CHANCE", icon: "star", cost: 12,
+    desc: "Once per run, survive going broke — you wake up with $300 and a story." }
+];
+
+function starMarketItem(id) { return STAR_MARKET.find(i => i.id === id) || null; }
+
+function hasStarUpgrade(id) {
+  return !!(profile && profile.starUpgrades && profile.starUpgrades[id]);
+}
+
+function starBalance() {
+  return Math.max(0, totalStars() - (profile?.starSpent || 0));
+}
+
+function buyStarUpgrade(id) {
+  const item = starMarketItem(id);
+  if (!profile || !item) return false;
+  if (hasStarUpgrade(id)) { toast("You already own that favor.", "info"); return false; }
+  if (starBalance() < item.cost) {
+    toast(`Need ★ ${item.cost} — you have ★ ${starBalance()}.`, "bad");
+    sfx("error");
+    return false;
+  }
+  profile.starSpent = (profile.starSpent || 0) + item.cost;
+  profile.starUpgrades = profile.starUpgrades || {};
+  profile.starUpgrades[id] = true;
+  saveProfile();
+  addLog(`Bought a star favor: ${item.name}.`, "gold");
+  sfx("prestige");
+  toast(`STAR FAVOR — ${item.name}`, "purple");
+  renderAll();
+  return true;
+}
+
+function russianChambers() {
+  return 6 + (hasStarUpgrade("extraChamber") ? 1 : 0);
+}
 
 function vaultList(kind) {
   if (kind === "theme") return THEMES;

@@ -78,22 +78,18 @@ function renderHUD() {
   if (backroomSub) {
     backroomSub.textContent = state.prestigeUnlocked
       ? "Russian roulette — open"
-      : state.offerExpired
-        ? "Offer expired this run"
-        : `Unlock at ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY}`;
+      : `Unlock at ${fmt(PRESTIGE_GOAL)}`;
   }
 
   const backroomState = $("#backroomState");
-  if (backroomState) backroomState.textContent = state.prestigeUnlocked ? "▸" : state.offerExpired ? "✕" : "🔒";
+  if (backroomState) backroomState.textContent = state.prestigeUnlocked ? "▸" : "🔒";
 
   const prestigeMini = $("#prestigeMini");
   if (prestigeMini) {
     const stars = state.prestige.stars || 0;
     const blurb = state.prestigeUnlocked
       ? "The back room is open. Stars wait inside."
-      : state.offerExpired
-        ? "This run's back-room offer expired. Prestige stars carry to the next run."
-        : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to open the back room.`;
+      : `Bank ${fmt(PRESTIGE_GOAL)} whenever you can to open the back room.`;
     prestigeMini.innerHTML = `<b>PRESTIGE ★ ${stars}</b>${blurb}`;
   }
 
@@ -205,14 +201,20 @@ function renderRightRail() {
   </div>`;
 
   const range = hustleRange();
-  const used = state.sideHustleDay === state.day;
+  const doubleShift = (typeof hasStarUpgrade === "function") && hasStarUpgrade("doubleShift");
+  const maxShifts = doubleShift ? 2 : 1;
+  const shiftsToday = state.sideHustleDay === state.day ? (state.sideHustleUses || 0) : 0;
+  const shiftsLeft = Math.max(0, maxShifts - shiftsToday);
+  const used = shiftsLeft <= 0;
   const hustleReady = !used && state.energy >= 1 && !ui.busy && !ui.sleeping && !state.gameOver;
+  const hustleMin = doubleShift ? range.min * 2 : range.min;
+  const hustleMax = doubleShift ? range.max * 2 : range.max;
   hustlePanel.innerHTML = `<div class="panel hustle-panel">
-    <div class="panel-head"><b>SIDE HUSTLE</b><span class="tag">1 / DAY</span></div>
-    <p>Scrub the floor, bus tables, dodge the pit boss. Costs 1 energy.</p>
-    <div class="hustle-pay"><span>PAYS</span><b>${fmt(range.min)}–${fmt(range.max)}</b></div>
+    <div class="panel-head"><b>SIDE HUSTLE</b><span class="tag">${shiftsLeft} / ${maxShifts} TODAY</span></div>
+    <p>Scrub the floor, bus tables, dodge the pit boss. Costs 1 energy.${doubleShift ? " DOUBLE SHIFT pays double." : ""}</p>
+    <div class="hustle-pay"><span>PAYS</span><b>${fmt(hustleMin)}–${fmt(hustleMax)}</b></div>
     <button class="btn btn-green btn-block btn-sm" data-action="hustle" ${hustleReady ? "" : "disabled"}>${used ? "DONE FOR TODAY" : "WORK THE FLOOR"}</button>
-    <div class="sleep-hint">${used ? "The pit boss is watching. Come back tomorrow." : state.energy < 1 ? "No energy left. Sleep first." : "One honest shift per day."}</div>
+    <div class="sleep-hint">${used ? "The pit boss is watching. Come back tomorrow." : state.energy < 1 ? "No energy left. Sleep first." : doubleShift ? "Two honest shifts per day." : "One honest shift per day."}</div>
   </div>`;
 
   const full = state.energy >= maxEnergy();
@@ -465,7 +467,7 @@ function renderLobby() {
     <div class="survival-strip">
       <div class="survival-item ${due.length ? "hot" : ""}"><b>SHARK WATCH</b>${due.length ? `${due.length} bill${due.length === 1 ? "" : "s"} due today. Pay up or the run ends.` : next ? `Next bill is due Day ${next.dueDay} (${fmt(next.amount)}).` : "No bills. Something is wrong."}</div>
       <div class="survival-item"><b>ENERGY</b>${state.energy}/${maxEnergy()} left. Every play burns energy. Sleep to reset, but a new bill arrives.</div>
-      <div class="survival-item"><b>PRESTIGE</b>${state.prestigeUnlocked ? "The back room is open. Cash out Russian roulette to keep permanent stars." : state.offerExpired ? "This run's back-room offer expired. Pay the Shark's Tithe on Day 20 to end the run in a win." : `Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY}.`}</div>
+      <div class="survival-item"><b>PRESTIGE</b>${state.prestigeUnlocked ? "The back room is open. Cash out Russian roulette to keep permanent stars." : `Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to open the back room.`}</div>
     </div>
 
     <div class="lore-panel">
@@ -526,7 +528,7 @@ function renderShop() {
       <div class="shop-balance">BANKROLL<b>${fmt(state.cash)}</b></div>
     </div>
     <div class="shop-grid">${cards}</div>
-    <div class="shop-note"><b>PRESTIGE:</b> Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to open the back room. Every permanent star adds max energy, payouts and start cash to future runs — and the bonuses never stop growing. Reaching a new prestige tier pays a token bonus and lifts the floor for good.</div>
+    <div class="shop-note"><b>PRESTIGE:</b> Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to open the back room. Every permanent star adds max energy, payouts and start cash to future runs, and the bonuses never stop growing. New prestige tiers pay a token bonus and lift the floor for good, and stars can be spent in the STAR MARKET at the Vault.</div>
     <div class="shop-actions">
       <button class="btn btn-dark" data-action="go-lobby">← BACK TO FLOOR</button>
       <span>Upgrades last for this run only. Stars are forever.</span>
@@ -603,6 +605,20 @@ function perkCard(key, perk) {
   </div>`;
 }
 
+function starMarketCard(item) {
+  const owned = (typeof hasStarUpgrade === "function") && hasStarUpgrade(item.id);
+  const balance = (typeof starBalance === "function") ? starBalance() : 0;
+  const affordable = balance >= item.cost;
+  return `<div class="vault-card star-card ${owned ? "owned" : ""}">
+    <div class="vault-preview"><span class="perk-icon">${sprite(item.icon)}</span></div>
+    <div class="vault-name">${item.name}</div>
+    <div class="vault-desc">${item.desc}</div>
+    <div class="vault-action">${owned
+      ? `<span class="vault-state on">OWNED</span>`
+      : `<button class="btn btn-purple btn-sm" data-action="buy-star" data-id="${item.id}" ${affordable ? "" : "disabled"}>★ ${item.cost}</button>`}</div>
+  </div>`;
+}
+
 function renderVault() {
   if (!profile) return `<div class="screen narrow"><p>Profile unavailable.</p></div>`;
   const prog = levelProgress();
@@ -633,6 +649,10 @@ function renderVault() {
       </div>
     </div>
     <p class="vault-note">Tokens are permanent. Earn them by leveling up, completing run contracts, cashing out prestige stars, and unlocking achievements. Everything here carries between runs.</p>
+    <section class="vault-section star-market-section">
+      <div class="section-head"><h2>STAR MARKET</h2><span>Spend ★ ${starBalance()} of ${totalStars()} — favors never expire</span></div>
+      <div class="vault-grid perks">${STAR_MARKET.map(starMarketCard).join("")}</div>
+    </section>
     ${sections}
     <section class="vault-section">
       <div class="section-head"><h2>PERMANENT PERKS</h2><span>Bend the rules forever</span></div>
@@ -718,26 +738,24 @@ function renderTrophies() {
    ------------------------------------------------------------ */
 function renderBackroom() {
   const unlocked = state.prestigeUnlocked;
+  const chamberCount = (typeof russianChambers === "function") ? russianChambers() : 6;
   const hero = `<div class="backroom-hero">
     <span class="eyebrow">STAFF ONLY // NO CAMERAS // NO WITNESSES</span>
     <h1>THE BACK ROOM</h1>
-    <p>They only open this door for high rollers. Inside: one revolver, six chambers, one bullet, and a permanent kind of luck.</p>
+    <p>They only open this door for high rollers. Inside: one revolver, ${chamberCount === 6 ? "six" : "seven"} chambers, one bullet, and a permanent kind of luck.</p>
   </div>`;
 
   if (!unlocked) {
     const cashMet = state.cash >= PRESTIGE_GOAL;
-    const dayMet = state.day <= PRESTIGE_DAY;
     return `<div class="screen backroom-screen">
       ${hero}
       <div class="locked-box">
         <span class="lock-icon">${sprite("lock")}</span>
         <h2>THE DOOR IS LOCKED</h2>
-        <p>Reach <b class="gold">${fmt(PRESTIGE_GOAL)}</b> in cash by the end of <b class="cyan">Day ${PRESTIGE_DAY}</b>. Bring the money to the man with the revolver.</p>
+        <p>Bank <b class="gold">${fmt(PRESTIGE_GOAL)}</b> in cash and the man with the revolver will open the door. No deadline — build your pile however you like, but the sharks are patient and so is he.</p>
         <div class="req-list">
           <span class="req ${cashMet ? "met" : "failed"}">CASH ${fmt(state.cash)} / ${fmt(PRESTIGE_GOAL)}</span>
-          <span class="req ${dayMet ? "met" : "failed"}">DAY ${state.day} / ${PRESTIGE_DAY}</span>
         </div>
-        ${state.offerExpired ? `<div class="expired">OFFER EXPIRED — THE DOOR IS SHUT FOR THIS RUN.</div>` : ""}
         <div class="actions-row">
           <button class="btn btn-gold" data-action="go-lobby">BACK TO THE FLOOR</button>
           <button class="btn btn-dark" data-action="go-shop">UPGRADE DEN</button>
@@ -749,8 +767,8 @@ function renderBackroom() {
   const r = state.russian;
   const chancePct = r.remaining > 0 ? Math.round(100 / r.remaining) : 100;
   const lastChamber = r.remaining <= 1;
-  const chambers = Array.from({ length: 6 }, (_, i) => `<span class="chamber ${i < r.pulled ? "spent" : ""}" style="--i:${i}"></span>`).join("");
-  const bars = Array.from({ length: 6 }, (_, i) => `<span class="risk-bar ${i < r.pulled ? "spent" : i < r.pulled + r.remaining ? "live" : ""}"></span>`).join("");
+  const chambers = Array.from({ length: chamberCount }, (_, i) => `<span class="chamber ${i < r.pulled ? "spent" : ""}" style="--i:${i}"></span>`).join("");
+  const bars = Array.from({ length: chamberCount }, (_, i) => `<span class="risk-bar ${i < r.pulled ? "spent" : i < r.pulled + r.remaining ? "live" : ""}"></span>`).join("");
   const canPull = !ui.busy && !lastChamber && !state.gameOver;
   const canCash = !ui.busy && r.earned > 0 && !state.gameOver;
 
@@ -946,10 +964,11 @@ function showHelp() {
       <div class="help-item"><b>SIDE HUSTLE</b>Once per day, burn 1 energy for a small payout.</div>
       <div class="help-item"><b>SLEEP</b>Restores energy and advances the day. A new bill arrives.</div>
       <div class="help-item"><b>BANKRUPT</b>Hit zero cash and the run is over. Start a new one.</div>
-      <div class="help-item"><b>PRESTIGE</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock the back room.</div>
+      <div class="help-item"><b>PRESTIGE</b>Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to unlock the back room and permanent stars.</div>
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay it to end the run in a win.</div>
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that bend payouts, energy and debt. Read them in the right rail.</div>
       <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
+      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
       <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
       <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
       <div class="help-item"><b>SETTINGS</b>Use the ⚙ button up top for volume, save codes and reset.</div>
@@ -968,9 +987,10 @@ function showIntro() {
       <div class="help-item"><b>THE FLOOR</b>Eight cabinets. Each play burns energy and pays out — or does not.</div>
       <div class="help-item"><b>THE SHARKS</b>A new bill lands every morning and comes due in five days. Pay it before you sleep past the due day, or the run ends.</div>
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that change payouts, energy and debt. No two runs play the same.</div>
-      <div class="help-item"><b>THE BACK ROOM</b>Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to unlock Russian roulette and permanent stars.</div>
+      <div class="help-item"><b>THE BACK ROOM</b>Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to unlock Russian roulette and permanent stars.</div>
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay the Shark to walk away a winner.</div>
       <div class="help-item"><b>THE VAULT</b>Level up and bank tokens to unlock themes, skins, dice, cards and permanent perks.</div>
+      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
       <div class="help-item"><b>CONTRACTS</b>Every run draws three random contracts. Complete them for tokens and XP.</div>
       <div class="help-item"><b>THE LEDGER</b>Stars, tokens, achievements and every unlock carry into your next run.</div>
     </div>
@@ -1145,7 +1165,6 @@ async function doSleep() {
   state.stats.daysSurvived = Math.max(state.stats.daysSurvived, state.day);
   state.energy = maxEnergy();
   const missed = state.debts.filter(note => note.dueDay < state.day);
-  updatePrestigeExpiry();
   if (typeof pruneEffects === "function") pruneEffects(state);
   issueDebtFor(state, state.day);
   const morningEvent = (typeof rollMorningEvent === "function") ? rollMorningEvent(state) : null;
@@ -1179,8 +1198,10 @@ async function doSleep() {
   if (missed.length) {
     const owed = missed.reduce((sum, note) => sum + note.amount, 0);
     addLog(`Missed ${missed.length} bill(s) worth ${fmt(owed)}. The shark collected.`, "loss");
-    showGameOver(`You missed ${missed.length} bill${missed.length === 1 ? "" : "s"} worth ${fmt(owed)}. The shark collected everything.`);
-    return;
+    if (!trySecondChance()) {
+      showGameOver(`You missed ${missed.length} bill${missed.length === 1 ? "" : "s"} worth ${fmt(owed)}. The shark collected everything.`);
+      return;
+    }
   }
 
   toast(`Day ${state.day}. New bill in the ledger.`, "info");
@@ -1188,24 +1209,16 @@ async function doSleep() {
   checkPrestigeUnlock();
 }
 
-function updatePrestigeExpiry() {
-  if (!state.prestigeUnlocked && !state.offerExpired && state.day > PRESTIGE_DAY) {
-    state.offerExpired = true;
-    addLog("The back-room offer expired. The Shark's Tithe on Day 20 is still open.", "loss");
-    toast("Back room offer expired — the Tithe still stands.", "bad");
-  }
-}
-
 function checkPrestigeUnlock() {
-  if (!state || state.gameOver || state.prestigeWin > 0 || state.prestigeUnlocked || state.offerExpired) return;
-  if (state.day > PRESTIGE_DAY || state.cash < PRESTIGE_GOAL) return;
+  if (!state || state.gameOver || state.prestigeWin > 0 || state.prestigeUnlocked) return;
+  if (state.cash < PRESTIGE_GOAL) return;
   state.prestigeUnlocked = true;
   addLog("The back room door clicks open. Russian roulette unlocked.", "gold");
   saveState();
   sfx("prestige");
   renderAll();
   openModal(`<h2>THE BACK ROOM IS OPEN</h2>
-    <p>You hit <b>${fmt(PRESTIGE_GOAL)}</b> on Day <b>${state.day}</b>. The man in the back has been watching. He has a revolver and an offer.</p>
+    <p>You banked <b>${fmt(PRESTIGE_GOAL)}</b> on Day <b>${state.day}</b>. The man in the back has been watching. He has a revolver and an offer.</p>
     <p>Each safe pull earns a <b>permanent prestige star</b>. Cash out to keep them. The bullet ends the run.</p>
     <div class="modal-actions">
       <button class="btn btn-purple" data-action="go-backroom">ENTER THE BACK ROOM</button>
@@ -1259,13 +1272,17 @@ function payAllDebts() {
 
 function doHustle() {
   if (ui.busy || ui.sleeping || state.gameOver) return;
-  if (state.sideHustleDay === state.day) { toast("You already worked today.", "bad"); return; }
+  const doubleShift = (typeof hasStarUpgrade === "function") && hasStarUpgrade("doubleShift");
+  const maxShifts = doubleShift ? 2 : 1;
+  if (state.sideHustleDay !== state.day) { state.sideHustleDay = state.day; state.sideHustleUses = 0; }
+  if ((state.sideHustleUses || 0) >= maxShifts) { toast("You already worked today.", "bad"); return; }
   if (state.energy < 1) { toast("No energy left. Sleep first.", "bad"); sfx("error"); return; }
   const range = hustleRange();
-  const hustleMult = (typeof effectHustleMult === "function") ? effectHustleMult() : 1;
+  const hustleMult = ((typeof effectHustleMult === "function") ? effectHustleMult() : 1) * (doubleShift ? 2 : 1);
   const pay = Math.max(1, Math.round(randInt(range.min, range.max) * hustleMult));
   state.energy -= 1;
   state.sideHustleDay = state.day;
+  state.sideHustleUses = (state.sideHustleUses || 0) + 1;
   state.cash += pay;
   state.stats.bestCash = Math.max(state.stats.bestCash, state.cash);
   addLog(`Side hustle paid ${fmt(pay)}${hustleMult > 1 ? " (doubled)" : ""}.`, "win");
@@ -1283,6 +1300,20 @@ function takeWager(bet, game) {
   state.energy = Math.max(0, state.energy - game.energy);
   state.stats.played += 1;
   state.bets[game.id] = Math.max(game.minBet, Math.round(bet));
+}
+
+/* SECOND CHANCE — a one-time rescue from bankruptcy, once per run. */
+function trySecondChance() {
+  if (typeof hasStarUpgrade !== "function" || !hasStarUpgrade("secondChance")) return false;
+  if (state.secondChanceUsed) return false;
+  state.secondChanceUsed = true;
+  state.cash = Math.max(state.cash, 300);
+  state.debts = state.debts.filter(note => note.dueDay >= state.day);
+  addLog("SECOND CHANCE — a stranger covered your tab. You woke up with $300.", "gold");
+  toast("SECOND CHANCE — broke, but breathing.", "purple");
+  sfx("upgrade");
+  saveState();
+  return true;
 }
 
 function settleGame(gameId, options = {}) {
@@ -1345,8 +1376,11 @@ function settleGame(gameId, options = {}) {
   renderAll();
 
   if (state.cash <= 0 && !state.gameOver) {
-    showGameOver("You ran out of cash. The floor keeps what it takes.");
-    return;
+    if (!trySecondChance()) {
+      showGameOver("You ran out of cash. The floor keeps what it takes.");
+      return;
+    }
+    renderAll();
   }
   checkPrestigeUnlock();
 }

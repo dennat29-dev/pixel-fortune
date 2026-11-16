@@ -2399,6 +2399,13 @@ button:focus-visible, [tabindex]:focus-visible {
 .vault-card.owned { border-color: #2f6a4a; }
 .vault-card.equipped { border-color: var(--gold); box-shadow: inset 0 2px 0 #4a3a15, 0 3px 0 #03040a, 0 0 18px rgba(255,207,74,0.18); }
 .vault-card.perk { border-color: #4a3d6b; }
+.star-market-section { border: 2px solid #5b3a86; background: linear-gradient(180deg, rgba(90,52,150,0.12), transparent); padding: 12px; }
+.star-market-section .section-head h2 { color: #c9a7ff; }
+.vault-card.star-card { border-color: #6a4aa0; background: linear-gradient(135deg, rgba(177,108,255,0.08), transparent 55%), linear-gradient(180deg, #1b1230, #0e0918); }
+.vault-card.star-card.owned { border-color: #2f6a4a; }
+.vault-card.star-card .vault-preview { border-color: #4a2f78; box-shadow: inset 0 0 18px rgba(120,60,200,0.28); }
+.vault-card.star-card .perk-icon { color: var(--purple); }
+.vault-card.star-card .vault-name { color: #d9c9ff; }
 .vault-preview {
   height: 66px;
   display: flex;

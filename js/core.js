@@ -94,13 +94,19 @@ function tierPayoutBonus(stars = 0) {
 }
 
 /* Everything a run starts with from permanent progress, in one place. */
+function starMarketCash() {
+  return (typeof hasStarUpgrade === "function" && hasStarUpgrade("coldCash")) ? 400 : 0;
+}
+
 function permanentPower(stars = 0) {
   const n = Math.max(0, Math.floor(stars || 0));
+  const marketEnergy = (typeof hasStarUpgrade === "function" && hasStarUpgrade("bigLungs")) ? 8 : 0;
+  const marketPayout = (typeof hasStarUpgrade === "function" && hasStarUpgrade("goldenTouch")) ? 0.05 : 0;
   return {
     stars: n,
-    energy: starEnergyBonus(n) + tierEnergyBonus(n),
-    payout: starPayoutBonus(n) + tierPayoutBonus(n),
-    startCash: starStartCash(n) + perkLevel("headStart") * 100
+    energy: starEnergyBonus(n) + tierEnergyBonus(n) + marketEnergy,
+    payout: starPayoutBonus(n) + tierPayoutBonus(n) + marketPayout,
+    startCash: starStartCash(n) + perkLevel("headStart") * 100 + starMarketCash()
   };
 }
 
@@ -108,9 +114,10 @@ function maxEnergy(s = state) {
   if (!s) return BASE_ENERGY;
   const level = s.upgradeLevels?.energy || 0;
   const starBonus = starEnergyBonus(s.prestige?.stars || 0) + tierEnergyBonus(s.prestige?.stars || 0);
+  const marketBonus = (typeof hasStarUpgrade === "function" && hasStarUpgrade("bigLungs")) ? 8 : 0;
   const perkBonus = perkLevel("warmBed") * 3;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("energy", s) : 0;
-  return Math.max(1, BASE_ENERGY + level * 4 + starBonus + perkBonus + modBonus);
+  return Math.max(1, BASE_ENERGY + level * 4 + starBonus + marketBonus + perkBonus + modBonus);
 }
 
 function payoutBonus(s = state) {
@@ -118,8 +125,9 @@ function payoutBonus(s = state) {
   const level = s.upgradeLevels?.payout || 0;
   const stars = s.prestige?.stars || 0;
   const perkBonus = perkLevel("goldPlate") * 0.03;
+  const marketBonus = (typeof hasStarUpgrade === "function" && hasStarUpgrade("goldenTouch")) ? 0.05 : 0;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("payout", s) : 0;
-  return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + perkBonus + modBonus);
+  return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + marketBonus + perkBonus + modBonus);
 }
 
 /* Payout multiplier for one cabinet, including temporary floor effects. */
@@ -141,9 +149,10 @@ function luckBonus(s = state) {
   if (!s) return 0;
   const upgrade = (s.upgradeLevels?.luck || 0) * 0.015;
   const perk = perkLevel("luckyCharm") * 0.012;
+  const market = (typeof hasStarUpgrade === "function" && hasStarUpgrade("fourLeaf")) ? 0.03 : 0;
   const effect = (typeof effectLuckPct === "function") ? effectLuckPct(s) : 0;
   const modLuck = (typeof runModTotal === "function") ? runModTotal("luck", s) : 0;
-  return upgrade + perk + effect + modLuck;
+  return upgrade + perk + market + effect + modLuck;
 }
 
 function debtModifier(s = state) {
@@ -202,7 +211,7 @@ function makeState(options = {}) {
     const mod = (typeof modifierById === "function") ? modifierById(id) : null;
     return sum + (mod?.startCash || 0);
   }, 0);
-  const startCash = START_CASH + starStartCash(stars) + headStart + modCash;
+  const startCash = START_CASH + starStartCash(stars) + headStart + modCash + starMarketCash();
   const s = {
     version: SAVE_VERSION,
     cash: startCash,
@@ -212,6 +221,8 @@ function makeState(options = {}) {
     bets: { ...DEFAULT_BETS },
     debts: [],
     sideHustleDay: 0,
+    sideHustleUses: 0,
+    secondChanceUsed: false,
     prestige: {
       stars,
       runs,
@@ -219,10 +230,9 @@ function makeState(options = {}) {
       lastPayout: null
     },
     prestigeUnlocked: false,
-    offerExpired: false,
     prestigeWin: 0,
     titheWin: 0,
-    russian: { remaining: 6, earned: 0, pulled: 0 },
+    russian: { remaining: (typeof russianChambers === "function" ? russianChambers() : 6), earned: 0, pulled: 0 },
     runStats: (typeof defaultRunStats === "function") ? defaultRunStats() : null,
     effects: [],
     modifiers,
@@ -246,6 +256,10 @@ function makeState(options = {}) {
 }
 
 function issueDebtFor(s, day, silent = false) {
+  if (day <= 1 && s.debts.length === 0 && typeof hasStarUpgrade === "function" && hasStarUpgrade("debtForgiven")) {
+    if (!silent) addLogTo(s, "FIRST ONE FREE — the opening bill was wiped from the ledger.", "gold");
+    return null;
+  }
   const base = 20 + day * 3 + randInt(0, 20);
   const amount = Math.max(10, Math.round((base * debtModifier(s)) / 5) * 5);
   const note = {
@@ -308,8 +322,9 @@ function loadState() {
     s.cash = Math.max(0, Math.floor(num(p.cash, s.cash)));
     s.energy = clamp(Math.floor(num(p.energy, s.energy)), 0, maxEnergy(s));
     s.sideHustleDay = Math.max(0, Math.floor(num(p.sideHustleDay, 0)));
+    s.sideHustleUses = Math.max(0, Math.floor(num(p.sideHustleUses, 0)));
+    s.secondChanceUsed = !!p.secondChanceUsed;
     s.prestigeUnlocked = !!p.prestigeUnlocked;
-    s.offerExpired = !!p.offerExpired;
     s.prestigeWin = Math.max(0, Math.floor(num(p.prestigeWin, 0)));
     s.titheWin = Math.max(0, Math.floor(num(p.titheWin, 0)));
     s.prestige.lastPayout = (p.prestige && p.prestige.lastPayout && typeof p.prestige.lastPayout === "object") ? p.prestige.lastPayout : null;
@@ -361,9 +376,11 @@ function loadState() {
     if (!s.debts.length && !s.gameOver && !s.prestigeWin && !s.titheWin) issueDebtFor(s, s.day, true);
 
     if (p.russian && typeof p.russian === "object") {
-      s.russian.remaining = clamp(Math.floor(num(p.russian.remaining, 6)), 1, 6);
-      s.russian.earned = clamp(Math.floor(num(p.russian.earned, 0)), 0, 5);
-      s.russian.pulled = clamp(Math.floor(num(p.russian.pulled, 0)), 0, 5);
+      const chambers = (typeof russianChambers === "function") ? russianChambers() : 6;
+      const maxSeals = chambers - 1;
+      s.russian.remaining = clamp(Math.floor(num(p.russian.remaining, chambers)), 1, chambers);
+      s.russian.earned = clamp(Math.floor(num(p.russian.earned, 0)), 0, maxSeals);
+      s.russian.pulled = clamp(Math.floor(num(p.russian.pulled, 0)), 0, maxSeals);
     }
 
     s.runStats = (p.runStats && typeof p.runStats === "object")

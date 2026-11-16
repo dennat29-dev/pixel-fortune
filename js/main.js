@@ -45,7 +45,8 @@ const ACTIONS = {
   "russian-cashout": () => cashOutRussian(),
   "buy-unlock": el => buyUnlock(el.dataset.kind, el.dataset.id),
   "equip-item": el => equipItem(el.dataset.kind, el.dataset.id),
-  "buy-perk": el => buyPerk(el.dataset.perk)
+  "buy-perk": el => buyPerk(el.dataset.perk),
+  "buy-star": el => buyStarUpgrade(el.dataset.id)
 };
 
 function onDocumentClick(event) {
@@ -118,7 +119,6 @@ function init() {
   injectStaticIcons();
   lastCashShown = null;
   if (!hadSave && typeof recordRunStart === "function") recordRunStart();
-  updatePrestigeExpiry();
   renderAll();
 
   if (state.prestigeWin > 0) {
@@ -222,7 +222,6 @@ function installDebugAPI() {
     },
     unlockBackroom() {
       state.prestigeUnlocked = true;
-      state.offerExpired = false;
       saveState();
       renderAll();
       toast("Back room unlocked (debug).", "purple");
