@@ -322,8 +322,12 @@ function showTitheWin() {
   ui.busy = false;
   ui.sleeping = false;
   stopMusic();
-  const tier = tierFor(totalStars());
-  const next = nextTierFor(totalStars());
+  const total = totalStars();
+  const tier = tierFor(total);
+  const next = nextTierFor(total);
+  const power = permanentPower(total);
+  const payout = state.prestige.lastPayout || {};
+  const tierUps = Array.isArray(payout.tierUps) ? payout.tierUps : [];
   layer.hidden = false;
   layer.innerHTML = `<div class="prestige-win-card tithe-win-card">
     <div class="big-star">⚖</div>
@@ -335,13 +339,14 @@ function showTitheWin() {
       <div class="tithe-reward"><span>TOKENS</span><b>${TITHE_REWARD.tokens} ◆</b></div>
       <div class="tithe-reward"><span>XP</span><b>${TITHE_REWARD.xp}</b></div>
     </div>
-    <div class="prestige-earned">PERMANENT STARS <b>★ ${totalStars()}</b></div>
+    ${tierUps.length ? `<div class="pw-tierup">TIER UP — ${tierUps.map(t => `<b style="color:${t.color}">${t.name}</b>`).join(" · ")} &nbsp;+${tierUps.reduce((sum, t) => sum + t.tokens, 0)} ◆</div>` : ""}
+    <div class="prestige-earned">PERMANENT POWER <b>★ ${total}</b> · +${power.energy} energy · +${Math.round(power.payout * 100)}% payouts · ${fmt(power.startCash)} start</div>
     <div class="gameover-meta">
       <span>TIER <b style="color:${tier.color}">${tier.name}</b></span>
       <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
-      ${next ? `<span>NEXT TIER <b>${next.name} (${next.stars - totalStars()}★)</b></span>` : `<span>TOP TIER</span>`}
+      ${next ? `<span>NEXT TIER <b>${next.name} (${next.stars - total}★)</b></span>` : `<span>TOP TIER</span>`}
     </div>
-    <button class="btn btn-gold btn-lg" data-action="restart-run">START NEXT RUN</button>
+    <button class="btn btn-gold btn-lg" data-action="restart-run">START NEXT RUN — ${fmt(power.startCash)}</button>
   </div>`;
   sfx("prestige");
 }
@@ -521,7 +526,7 @@ function renderShop() {
       <div class="shop-balance">BANKROLL<b>${fmt(state.cash)}</b></div>
     </div>
     <div class="shop-grid">${cards}</div>
-    <div class="shop-note"><b>PRESTIGE:</b> Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to open the back room. Each permanent star adds +4 max energy and +4% payouts on future runs.</div>
+    <div class="shop-note"><b>PRESTIGE:</b> Reach ${fmt(PRESTIGE_GOAL)} by Day ${PRESTIGE_DAY} to open the back room. Every permanent star adds max energy, payouts and start cash to future runs — and the bonuses never stop growing. Reaching a new prestige tier pays a token bonus and lifts the floor for good.</div>
     <div class="shop-actions">
       <button class="btn btn-dark" data-action="go-lobby">← BACK TO FLOOR</button>
       <span>Upgrades last for this run only. Stars are forever.</span>
@@ -749,8 +754,23 @@ function renderBackroom() {
   const canPull = !ui.busy && !lastChamber && !state.gameOver;
   const canCash = !ui.busy && r.earned > 0 && !state.gameOver;
 
+  const nowStars = state.prestige.stars || 0;
+  const afterStars = nowStars + r.earned;
+  const power = permanentPower(nowStars);
+  const gainEnergy = (starEnergyBonus(afterStars) + tierEnergyBonus(afterStars)) - (starEnergyBonus(nowStars) + tierEnergyBonus(nowStars));
+  const gainPayout = (starPayoutBonus(afterStars) + tierPayoutBonus(afterStars)) - (starPayoutBonus(nowStars) + tierPayoutBonus(nowStars));
+  const gainCash = starStartCash(afterStars) - starStartCash(nowStars);
+  const nextTier = nextTierFor(nowStars);
+  const tierHit = nextTier && afterStars >= nextTier.stars;
+
   return `<div class="screen backroom-screen">
     ${hero}
+    <div class="backroom-power">
+      <div class="bp-item"><span>PERMANENT STARS</span><b>★ ${power.stars}</b></div>
+      <div class="bp-item"><span>MAX ENERGY</span><b>+${power.energy}</b></div>
+      <div class="bp-item"><span>PAYOUTS</span><b>+${Math.round(power.payout * 100)}%</b></div>
+      <div class="bp-item"><span>START CASH</span><b>${fmt(power.startCash)}</b></div>
+    </div>
     <div class="backroom-content">
       <div class="gun-stage" id="gunStage">
         <div class="revolver">
@@ -770,6 +790,17 @@ function renderBackroom() {
           ? "One chamber left. It is the bullet. Cash out while you still have a face."
           : `Every safe pull banks a permanent prestige star. Cash out to keep them. The bullet ends the run and takes the unpreserved seals with it.`}</div>
         <div class="risk-bars">${bars}</div>
+        ${r.earned > 0 ? `<div class="cashout-preview">
+          <div class="cp-head">CASH OUT ${r.earned} SEAL${r.earned === 1 ? "" : "S"} FOR</div>
+          <div class="cp-gains">
+            <span class="cp-gain">★ +${r.earned}</span>
+            ${gainEnergy > 0 ? `<span class="cp-gain">⚡ +${gainEnergy} energy</span>` : ""}
+            ${gainPayout > 0 ? `<span class="cp-gain">+${Math.round(gainPayout * 100)}% payouts</span>` : ""}
+            ${gainCash > 0 ? `<span class="cp-gain">+${fmt(gainCash)} start cash</span>` : ""}
+            <span class="cp-gain">+${r.earned * 2 + tierIndex(afterStars) * 2} ◆ tokens</span>
+          </div>
+          ${tierHit ? `<div class="cp-tier">TIER UP: <b style="color:${nextTier.color}">${nextTier.name}</b> — bonus tokens on top</div>` : ""}
+        </div>` : ""}
         <div class="backroom-actions">
           <button class="btn btn-red" data-action="russian-pull" ${canPull ? "" : "disabled"}>PULL THE TRIGGER</button>
           <button class="btn btn-purple" data-action="russian-cashout" ${canCash ? "" : "disabled"}>CASH OUT ${r.earned} SEAL${r.earned === 1 ? "" : "S"}</button>
@@ -1390,23 +1421,57 @@ function showPrestigeWin(earned) {
   if (!layer) return;
   ui.busy = false;
   stopMusic();
-  const tier = tierFor(totalStars());
-  const next = nextTierFor(totalStars());
-  const startCash = START_CASH + Math.min(totalStars(), 20) * 50 + perkLevel("headStart") * 100;
+
+  const total = totalStars();
+  const prev = Math.max(0, total - earned);
+  const tier = tierFor(total);
+  const next = nextTierFor(total);
+  const power = permanentPower(total);
+  const before = permanentPower(prev);
+  const payout = state.prestige.lastPayout || {};
+  const tierUps = Array.isArray(payout.tierUps) ? payout.tierUps : [];
+  const tierProgress = next
+    ? clamp((total - tier.stars) / Math.max(1, next.stars - tier.stars), 0, 1)
+    : 1;
+  const rows = [
+    { label: "MAX ENERGY", val: `+${power.energy}`, gain: power.energy - before.energy },
+    { label: "PAYOUTS", val: `+${Math.round(power.payout * 100)}%`, gain: Math.round((power.payout - before.payout) * 100) },
+    { label: "START CASH", val: fmt(power.startCash), gain: power.startCash - before.startCash }
+  ];
+
   layer.hidden = false;
   layer.innerHTML = `<div class="prestige-win-card">
     <div class="big-star">★</div>
     <div class="gameover-kicker">THE HOUSE PAID OUT</div>
     <h1>YOU WALKED OUT ALIVE</h1>
     <p>You banked <b>${earned}</b> prestige star${earned === 1 ? "" : "s"}. The revolver stays on the table. You do not.</p>
-    <p>Next run starts with <b>${fmt(startCash)}</b> and permanent bonuses.</p>
-    <div class="prestige-earned">PERMANENT STARS <b>★ ${totalStars()}</b></div>
-    <div class="gameover-meta">
-      <span>TIER <b style="color:${tier.color}">${tier.name}</b></span>
-      <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
-      ${next ? `<span>NEXT TIER <b>${next.name} (${next.stars - totalStars()}★)</b></span>` : `<span>TOP TIER</span>`}
+
+    <div class="pw-deltas">
+      <div class="pw-deltas-head">PERMANENT POWER — NOW</div>
+      ${rows.map(r => `<div class="pw-delta ${r.gain > 0 ? "up" : ""}">
+        <span class="pw-delta-label">${r.label}</span>
+        <span class="pw-delta-val">${r.val}</span>
+        <span class="pw-delta-gain">${r.gain > 0 ? `+${r.gain}` : "—"}</span>
+      </div>`).join("")}
+      <div class="pw-delta tokens ${(payout.tokenPayout || 0) > 0 ? "up" : ""}">
+        <span class="pw-delta-label">TOKENS</span>
+        <span class="pw-delta-val">${tokensLabel(profile.tokens)}</span>
+        <span class="pw-delta-gain">${(payout.tokenPayout || 0) > 0 ? `+${payout.tokenPayout} ◆` : "—"}</span>
+      </div>
     </div>
-    <button class="btn btn-purple btn-lg" data-action="restart-run">START NEXT RUN</button>
+
+    ${tierUps.length ? `<div class="pw-tierup">TIER UP — ${tierUps.map(t => `<b style="color:${t.color}">${t.name}</b>`).join(" · ")} &nbsp;+${tierUps.reduce((sum, t) => sum + t.tokens, 0)} ◆</div>` : ""}
+
+    <div class="pw-tier">
+      <div class="pw-tier-head">
+        <span>TIER <b style="color:${tier.color}">${tier.name}</b></span>
+        <span>★ ${total}${next ? ` / ${next.stars}` : ""}</span>
+      </div>
+      <div class="pw-tier-bar"><i style="width:${Math.round(tierProgress * 100)}%"></i></div>
+      <div class="pw-tier-next">${next ? `${next.stars - total}★ to ${next.name} — every tier lifts the floor for good.` : "TOP TIER. The Ledger lists you as an asset, not a debtor."}</div>
+    </div>
+
+    <button class="btn btn-purple btn-lg" data-action="restart-run">START NEXT RUN — ${fmt(power.startCash)}</button>
   </div>`;
   sfx("prestige");
 }

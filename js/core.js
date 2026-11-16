@@ -60,10 +60,54 @@ function perkLevel(key) {
   return Math.max(0, Math.floor(Number(profile?.perks?.[key]) || 0));
 }
 
+/* ------------------------------------------------------------
+   Prestige-star power. Uncapped, with gentle diminishing returns
+   so a star never becomes dead weight the way it did at 10.
+   ------------------------------------------------------------ */
+function starEnergyBonus(stars = 0) {
+  const n = Math.max(0, Math.floor(stars || 0));
+  if (n <= 10) return n * 4;
+  if (n <= 25) return 40 + (n - 10) * 2;
+  return 70 + (n - 25) * 1;
+}
+
+function starPayoutBonus(stars = 0) {
+  const n = Math.max(0, Math.floor(stars || 0));
+  if (n <= 10) return n * 0.04;
+  if (n <= 25) return 0.40 + (n - 10) * 0.02;
+  return 0.70 + (n - 25) * 0.01;
+}
+
+function starStartCash(stars = 0) {
+  const n = Math.max(0, Math.floor(stars || 0));
+  if (n <= 20) return n * 50;
+  return 1000 + (n - 20) * 25;
+}
+
+/* House respect: every prestige tier you reach lifts the floor for good. */
+function tierEnergyBonus(stars = 0) {
+  return (typeof tierIndex === "function" ? tierIndex(stars) : 0) * 2;
+}
+
+function tierPayoutBonus(stars = 0) {
+  return (typeof tierIndex === "function" ? tierIndex(stars) : 0) * 0.02;
+}
+
+/* Everything a run starts with from permanent progress, in one place. */
+function permanentPower(stars = 0) {
+  const n = Math.max(0, Math.floor(stars || 0));
+  return {
+    stars: n,
+    energy: starEnergyBonus(n) + tierEnergyBonus(n),
+    payout: starPayoutBonus(n) + tierPayoutBonus(n),
+    startCash: starStartCash(n) + perkLevel("headStart") * 100
+  };
+}
+
 function maxEnergy(s = state) {
   if (!s) return BASE_ENERGY;
   const level = s.upgradeLevels?.energy || 0;
-  const starBonus = Math.min(10, s.prestige?.stars || 0) * 4;
+  const starBonus = starEnergyBonus(s.prestige?.stars || 0) + tierEnergyBonus(s.prestige?.stars || 0);
   const perkBonus = perkLevel("warmBed") * 3;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("energy", s) : 0;
   return Math.max(1, BASE_ENERGY + level * 4 + starBonus + perkBonus + modBonus);
@@ -72,10 +116,10 @@ function maxEnergy(s = state) {
 function payoutBonus(s = state) {
   if (!s) return 1;
   const level = s.upgradeLevels?.payout || 0;
-  const stars = Math.min(10, s.prestige?.stars || 0);
+  const stars = s.prestige?.stars || 0;
   const perkBonus = perkLevel("goldPlate") * 0.03;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("payout", s) : 0;
-  return Math.max(0, 1 + level * 0.05 + stars * 0.04 + perkBonus + modBonus);
+  return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + perkBonus + modBonus);
 }
 
 /* Payout multiplier for one cabinet, including temporary floor effects. */
@@ -158,7 +202,7 @@ function makeState(options = {}) {
     const mod = (typeof modifierById === "function") ? modifierById(id) : null;
     return sum + (mod?.startCash || 0);
   }, 0);
-  const startCash = START_CASH + Math.min(stars, 20) * 50 + headStart + modCash;
+  const startCash = START_CASH + starStartCash(stars) + headStart + modCash;
   const s = {
     version: SAVE_VERSION,
     cash: startCash,
@@ -171,7 +215,8 @@ function makeState(options = {}) {
     prestige: {
       stars,
       runs,
-      bestCash: Math.max(stats.bestCash || 0, startCash)
+      bestCash: Math.max(stats.bestCash || 0, startCash),
+      lastPayout: null
     },
     prestigeUnlocked: false,
     offerExpired: false,
@@ -267,6 +312,7 @@ function loadState() {
     s.offerExpired = !!p.offerExpired;
     s.prestigeWin = Math.max(0, Math.floor(num(p.prestigeWin, 0)));
     s.titheWin = Math.max(0, Math.floor(num(p.titheWin, 0)));
+    s.prestige.lastPayout = (p.prestige && p.prestige.lastPayout && typeof p.prestige.lastPayout === "object") ? p.prestige.lastPayout : null;
     s.gameOver = !!p.gameOver;
     s.gameOverReason = typeof p.gameOverReason === "string" ? p.gameOverReason : "";
     s.sound = p.sound !== false;

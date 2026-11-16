@@ -1779,6 +1779,42 @@ button:focus-visible, [tabindex]:focus-visible {
 .backroom-actions .btn { width: 100%; }
 .seal-count { display: flex; justify-content: space-between; border-top: 1px dashed #492735; padding-top: 8px; margin-top: 11px; color: #ad8d9a; font-size: 16px; }
 .seal-count b { color: var(--purple); font-family: var(--font-display); font-size: 10px; }
+
+/* Permanent prestige power strip + cash-out preview */
+.backroom-power {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  max-width: 760px;
+  margin: 0 auto 16px;
+}
+.bp-item {
+  border: 2px solid #3a2350;
+  background: linear-gradient(180deg, #1a1230, #100a1c);
+  padding: 8px 6px;
+  text-align: center;
+  box-shadow: 0 3px 0 #03040a;
+}
+.bp-item span { display: block; font-family: var(--font-display); font-size: 6px; color: #9c86c4; line-height: 1.9; }
+.bp-item b { display: block; font-family: var(--font-display); font-size: 11px; color: var(--purple); line-height: 1.6; }
+.cashout-preview {
+  border: 2px dashed #5b3a86;
+  background: rgba(90, 52, 150, 0.16);
+  padding: 9px;
+  margin: 4px 0 12px;
+}
+.cp-head { font-family: var(--font-display); font-size: 7px; color: var(--gold); line-height: 1.7; margin-bottom: 6px; }
+.cp-gains { display: flex; flex-wrap: wrap; gap: 5px; }
+.cp-gain {
+  border: 1px solid #6a4aa0;
+  background: #150d24;
+  color: #d9c9ff;
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+.cp-tier { margin-top: 7px; color: var(--gold); font-size: 15px; line-height: 1.1; }
+.cp-tier b { font-family: var(--font-display); font-size: 7px; }
 .locked-box { text-align: center; padding: 28px 20px; border: 2px dashed #452638; background: rgba(23,10,17,0.6); }
 .locked-box .lock-icon { width: 66px; height: 66px; margin: 0 auto 12px; display: block; opacity: 0.75; }
 .locked-box h2 { font-family: var(--font-display); font-size: 13px; color: #e9b6c4; line-height: 1.6; margin: 0 0 8px; }
@@ -2132,6 +2168,48 @@ button:focus-visible, [tabindex]:focus-visible {
 .prestige-win-card p { color: #c8b3df; font-size: 21px; margin: 0 auto 10px; max-width: 480px; }
 .big-star { font-size: 64px; color: var(--gold); text-shadow: 4px 4px 0 #5a3512, 0 0 30px rgba(255,207,74,0.5); line-height: 1; animation: starPulse 1s steps(2,end) infinite; }
 .prestige-win-card .btn { margin-top: 9px; }
+
+/* prestige reward breakdown */
+.pw-deltas {
+  border: 2px solid #3a2350;
+  background: #100a1c;
+  padding: 10px;
+  margin: 14px auto;
+  max-width: 460px;
+}
+.pw-deltas-head { font-family: var(--font-display); font-size: 7px; color: #9c86c4; letter-spacing: 1px; margin-bottom: 8px; }
+.pw-delta {
+  display: grid;
+  grid-template-columns: 1fr auto 74px;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 2px;
+  border-top: 1px dashed #33224c;
+}
+.pw-delta:first-of-type { border-top: none; }
+.pw-delta-label { text-align: left; font-family: var(--font-display); font-size: 6px; color: #9c86c4; line-height: 1.9; }
+.pw-delta-val { font-family: var(--font-display); font-size: 9px; color: var(--text); }
+.pw-delta-gain { font-size: 15px; color: var(--muted-2); text-align: right; line-height: 1; }
+.pw-delta.up .pw-delta-gain { color: var(--green); }
+.pw-delta.tokens .pw-delta-val { color: var(--purple); }
+.pw-tierup {
+  display: inline-block;
+  border: 2px solid #714597;
+  background: rgba(177,108,255,0.16);
+  color: #e6d4ff;
+  font-size: 16px;
+  line-height: 1.2;
+  padding: 7px 12px;
+  margin: 4px auto 10px;
+  box-shadow: 0 0 18px rgba(177,108,255,0.3);
+}
+.pw-tierup b { font-family: var(--font-display); font-size: 8px; }
+.pw-tier { max-width: 460px; margin: 12px auto 4px; }
+.pw-tier-head { display: flex; justify-content: space-between; font-family: var(--font-display); font-size: 7px; color: var(--muted); margin-bottom: 6px; }
+.pw-tier-head b { font-size: 8px; }
+.pw-tier-bar { height: 12px; border: 2px solid #3a2350; background: #0b0714; }
+.pw-tier-bar i { display: block; height: 100%; background: linear-gradient(90deg, #7a4fb5, var(--purple)); }
+.pw-tier-next { color: var(--muted); font-size: 15px; line-height: 1.1; margin-top: 6px; }
 
 /* utility */
 .center { text-align: center; }
@@ -2803,6 +2881,7 @@ button:focus-visible, [tabindex]:focus-visible {
   .horse-pick:nth-child(4), .horse-pick:nth-child(5) { grid-column: span 1; }
   .shop-grid { grid-template-columns: 1fr; }
   .backroom-content { grid-template-columns: 1fr; }
+  .backroom-power { grid-template-columns: repeat(2, 1fr); }
   .gun-stage { min-height: 270px; }
   .revolver { transform: rotate(-4deg) scale(0.72); }
   .gameover-stats { grid-template-columns: 1fr 1fr 1fr; }

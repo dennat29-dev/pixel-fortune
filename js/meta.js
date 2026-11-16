@@ -207,6 +207,33 @@ function nextTierFor(stars) {
   return PRESTIGE_TIERS.find(tier => tier.stars > stars) || null;
 }
 
+/* One-time bundle the first time you reach each tier. */
+const TIER_REWARDS = {
+  bronze:   { tokens: 5,  xp: 60 },
+  silver:   { tokens: 10, xp: 120 },
+  gold:     { tokens: 18, xp: 220 },
+  platinum: { tokens: 30, xp: 380 },
+  legend:   { tokens: 55, xp: 700 }
+};
+
+/* Grant every tier reward crossed between two star totals. Returns the list. */
+function grantTierRewards(prevStars, newStars) {
+  const ups = [];
+  const from = tierIndex(prevStars);
+  const to = tierIndex(newStars);
+  for (let i = from + 1; i <= to; i++) {
+    const tier = PRESTIGE_TIERS[i];
+    const reward = TIER_REWARDS[tier.id];
+    if (!reward) continue;
+    grantTokens(reward.tokens, `tier: ${tier.name}`);
+    addXP(reward.xp, `tier: ${tier.name}`);
+    ups.push({ id: tier.id, name: tier.name, color: tier.color, tokens: reward.tokens, xp: reward.xp });
+    addLog(`Reached the ${tier.name} tier. The house tips its hat.`, "gold");
+    toast(`TIER UP — ${tier.name} (+${reward.tokens} ◆)`, "purple");
+  }
+  return ups;
+}
+
 /* ------------------------------------------------------------
    Vault catalogue: themes, skins, dice, cards, perks
    ------------------------------------------------------------ */
@@ -662,6 +689,7 @@ function titheReady(s = state) {
 
 function metaOnTithe() {
   if (!profile || !state) return;
+  const prevStars = totalStars();
   state.prestige.stars = Math.max(0, state.prestige.stars || 0) + TITHE_REWARD.stars;
   profile.stars = Math.max(profile.stars || 0, state.prestige.stars);
   state.stats.prestiges = (state.stats.prestiges || 0) + 1;
@@ -671,6 +699,8 @@ function metaOnTithe() {
   grantTokens(TITHE_REWARD.tokens, "the tithe");
   checkAchievements({ type: "tithe" });
   updateChallenges({ type: "tithe" });
+  const tierUps = grantTierRewards(prevStars, totalStars());
+  state.prestige.lastPayout = { earned: TITHE_REWARD.stars, prevStars, newStars: totalStars(), tokenPayout: TITHE_REWARD.tokens, xpPayout: TITHE_REWARD.xp, tierUps };
   saveProfile();
 }
 
@@ -990,17 +1020,25 @@ function metaOnRussian(earned) {
 }
 
 function metaOnPrestige(earned) {
-  if (!profile || !state) return;
+  if (!profile || !state) return null;
+  const prevStars = totalStars();
   state.prestige.stars = Math.max(0, state.prestige.stars || 0) + earned;
   profile.stars = Math.max(profile.stars || 0, state.prestige.stars);
+  const newStars = totalStars();
+  const tierIdx = tierIndex(newStars);
   state.stats.prestiges = (state.stats.prestiges || 0) + 1;
   profile.lifetime.prestiges += 1;
   profile.lifetime.starsEarned += earned;
-  addXP(40 + earned * 12, "prestige");
-  grantTokens(earned, "prestige cash-out");
+  const tokenPayout = earned * 2 + tierIdx * 2;
+  const xpPayout = 40 + earned * 16 + tierIdx * 20;
+  addXP(xpPayout, "prestige");
+  grantTokens(tokenPayout, "prestige cash-out");
   checkAchievements({ type: "prestige", earned, stars: profile.stars });
   updateChallenges({ type: "prestige", earned });
+  const tierUps = grantTierRewards(prevStars, newStars);
+  state.prestige.lastPayout = { earned, prevStars, newStars, tokenPayout, xpPayout, tierUps };
   saveProfile();
+  return state.prestige.lastPayout;
 }
 
 function metaOnHustle(pay) {
