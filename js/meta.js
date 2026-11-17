@@ -69,6 +69,9 @@ function defaultProfile() {
     perks: {},
     starSpent: 0,
     starUpgrades: {},
+    luck: 0,
+    ascensions: 0,
+    houseBroken: false,
     lifetime: defaultLifetime()
   };
 }
@@ -103,6 +106,9 @@ function loadProfile() {
   merged.perks = { ...base.perks, ...(p.perks || {}) };
   merged.starUpgrades = { ...base.starUpgrades, ...(p.starUpgrades || {}) };
   merged.starSpent = Math.max(0, Math.floor(Number(p.starSpent) || 0));
+  merged.luck = clamp(Number(p.luck) || 0, 0, ASCEND_LUCK_MAX);
+  merged.ascensions = Math.max(0, Math.floor(Number(p.ascensions) || 0));
+  merged.houseBroken = !!p.houseBroken || merged.luck >= ASCEND_LUCK_MAX;
   merged.lifetime = { ...base.lifetime, ...(p.lifetime || {}) };
   merged.achievements = (p.achievements && typeof p.achievements === "object") ? p.achievements : {};
   ["themes", "skins", "dice", "cards"].forEach(kind => {
@@ -209,6 +215,88 @@ function tierIndex(stars) {
 function tierFor(stars) { return PRESTIGE_TIERS[tierIndex(stars)]; }
 function nextTierFor(stars) {
   return PRESTIGE_TIERS.find(tier => tier.stars > stars) || null;
+}
+
+/* ------------------------------------------------------------
+   THE ASCENSION — sacrifice prestige for permanent Luck.
+   Reach the top tier, then trade every star and Star Market
+   favor for Luck that sharpens every cabinet, forever.
+   ------------------------------------------------------------ */
+const ASCEND_MIN_STARS = PRESTIGE_TIERS[PRESTIGE_TIERS.length - 1].stars; // LEGEND
+const ASCEND_LUCK_BASE = 0.06;   // luck gained on the first ascension
+const ASCEND_LUCK_STEP = 0.01;   // extra luck per prior ascension
+const ASCEND_LUCK_MAX = 0.40;    // luck cap — the house breaks here
+const ASCEND_OVER_BONUS = 0.005; // bonus luck per 10 stars climbed past LEGEND
+const ASCEND_OVER_STEP = 10;
+
+function ascensionLuck() {
+  return clamp(Number(profile?.luck) || 0, 0, ASCEND_LUCK_MAX);
+}
+
+function ascensionCount() {
+  return Math.max(0, Math.floor(Number(profile?.ascensions) || 0));
+}
+
+function houseBroken() {
+  return !!(profile && profile.houseBroken);
+}
+
+function ascensionReady() {
+  return !!profile && !houseBroken() && totalStars() >= ASCEND_MIN_STARS;
+}
+
+function ascensionOverStars() {
+  return Math.max(0, totalStars() - ASCEND_MIN_STARS);
+}
+
+function ascensionLuckGain() {
+  if (!profile || houseBroken()) return 0;
+  const over = ascensionOverStars();
+  const raw = ASCEND_LUCK_BASE
+    + ascensionCount() * ASCEND_LUCK_STEP
+    + Math.floor(over / ASCEND_OVER_STEP) * ASCEND_OVER_BONUS;
+  const remaining = Math.max(0, ASCEND_LUCK_MAX - ascensionLuck());
+  return Math.min(raw, remaining);
+}
+
+function ascensionProgress() {
+  return clamp(ascensionLuck() / ASCEND_LUCK_MAX, 0, 1);
+}
+
+/* Perform the ritual. Returns a summary for the UI, or null if blocked. */
+function ascend() {
+  if (!profile || !state) return null;
+  if (houseBroken()) { toast("The house is already broken.", "info"); return null; }
+  if (totalStars() < ASCEND_MIN_STARS) {
+    toast(`Reach ★ ${ASCEND_MIN_STARS} (LEGEND) to ascend.`, "bad");
+    sfx("error");
+    return null;
+  }
+  const sacrificed = totalStars();
+  const gain = ascensionLuckGain();
+  const before = ascensionLuck();
+  profile.luck = clamp(before + gain, 0, ASCEND_LUCK_MAX);
+  profile.ascensions = ascensionCount() + 1;
+  profile.stars = 0;
+  profile.starSpent = 0;
+  profile.starUpgrades = {};
+  if (state.prestige) state.prestige.stars = 0;
+
+  const tokens = 5 + profile.ascensions * 3;
+  const xp = 120 + profile.ascensions * 40;
+  grantTokens(tokens, "ascension");
+  addXP(xp, "ascension");
+
+  const broke = profile.luck >= ASCEND_LUCK_MAX - 1e-9;
+  if (broke) profile.houseBroken = true;
+  addLog(`Ascended. Permanent luck now ${Math.round(profile.luck * 100)}%.`, "gold");
+  saveProfile();
+  checkAchievements({ type: "ascend", ascensions: profile.ascensions, houseBroken: profile.houseBroken });
+
+  return {
+    sacrificed, gain, before, after: profile.luck, tokens, xp,
+    ascensions: profile.ascensions, broke
+  };
 }
 
 /* One-time bundle the first time you reach each tier. */
@@ -942,7 +1030,10 @@ const ACHIEVEMENTS = [
   { id: "themed", name: "REDECORATED", desc: "Equip a non-default theme.", icon: "gear", reward: { tokens: 2, xp: 25 }, check: (s, p, ev) => ev.type === "equip" && ev.kind === "theme" && ev.id !== "neon" },
   { id: "contract_1", name: "DEAL MAKER", desc: "Complete a run contract.", icon: "cards", reward: { tokens: 2, xp: 30 }, check: (s, p) => p.lifetime.contractsDone >= 1 },
   { id: "contract_15", name: "CONTRACTOR", desc: "Complete 15 run contracts.", icon: "cards", reward: { tokens: 5, xp: 80 }, check: (s, p) => p.lifetime.contractsDone >= 15 },
-  { id: "marathon", name: "MARATHON", desc: "Play 250 games across all runs.", icon: "coin", reward: { tokens: 4, xp: 60 }, check: (s, p) => p.lifetime.gamesPlayed >= 250 }
+  { id: "marathon", name: "MARATHON", desc: "Play 250 games across all runs.", icon: "coin", reward: { tokens: 4, xp: 60 }, check: (s, p) => p.lifetime.gamesPlayed >= 250 },
+  { id: "ascend_1", name: "ASCENDED", desc: "Ascend for the first time.", icon: "star", reward: { tokens: 6, xp: 100 }, check: (s, p) => (p.ascensions || 0) >= 1 },
+  { id: "ascend_5", name: "BEYOND LUCK", desc: "Ascend five times.", icon: "clover", reward: { tokens: 12, xp: 200 }, check: (s, p) => (p.ascensions || 0) >= 5 },
+  { id: "house_broken", name: "THE HOUSE BREAKS", desc: "Max out permanent luck and win everything.", icon: "seven", reward: { tokens: 25, xp: 400 }, check: (s, p) => !!p.houseBroken }
 ];
 
 function achievementStats() {

@@ -717,6 +717,8 @@ button:focus-visible, [tabindex]:focus-visible {
 }
 .hero-chip b { color: var(--green); font-weight: normal; }
 .hero-chip.warn b { color: var(--red); }
+.hero-chip.luck { border-color: #6a4aa0; }
+.hero-chip.luck b { color: #c9a7ff; }
 
 .lobby-stat-grid {
   display: grid;
@@ -1783,7 +1785,7 @@ button:focus-visible, [tabindex]:focus-visible {
 /* Permanent prestige power strip + cash-out preview */
 .backroom-power {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
   max-width: 760px;
   margin: 0 auto 16px;
@@ -2338,7 +2340,8 @@ button:focus-visible, [tabindex]:focus-visible {
 .pc-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--purple), var(--cyan)); transition: width 0.3s steps(8, end); }
 .pc-bottom { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 14px; color: var(--muted); line-height: 1; }
 .pc-tokens { color: var(--purple); }
-.pc-stars { color: var(--gold); }
+.pc-stars { color: var(--gold); font-size: 18px; line-height: 1; text-shadow: 0 0 8px rgba(255,207,74,0.4); }
+.pc-luck { color: #c9a7ff; }
 
 .rail-btn.vault { border-color: #2f5f6d; background: linear-gradient(180deg, #14323a, #0d1f27); }
 .rail-btn.vault:hover { border-color: var(--cyan); }
@@ -2406,6 +2409,83 @@ button:focus-visible, [tabindex]:focus-visible {
 .vault-card.star-card .vault-preview { border-color: #4a2f78; box-shadow: inset 0 0 18px rgba(120,60,200,0.28); }
 .vault-card.star-card .perk-icon { color: var(--purple); }
 .vault-card.star-card .vault-name { color: #d9c9ff; }
+
+/* ------------------------------------------------------------
+   The Ascension — permanent luck
+   ------------------------------------------------------------ */
+.ascension-section {
+  border: 2px solid #6a4aa0;
+  background: radial-gradient(circle at 20% 0%, rgba(201,167,255,0.16), transparent 60%), linear-gradient(180deg, #1a1230, #0d0818);
+  padding: 12px;
+}
+.ascension-section .section-head h2 { color: #e6d4ff; }
+.ascension-section.broken {
+  border-color: var(--gold);
+  background: radial-gradient(circle at 50% 0%, rgba(255,207,74,0.2), transparent 60%), linear-gradient(180deg, #241a08, #100a04);
+}
+.ascension-section.broken .section-head h2 { color: var(--gold); }
+.ascension-body { display: flex; flex-direction: column; gap: 10px; }
+.asc-meter { border: 2px solid #3a2350; background: #0b0714; padding: 9px; }
+.asc-meter-head { display: flex; justify-content: space-between; font-family: var(--font-display); font-size: 7px; color: #9c86c4; margin-bottom: 7px; }
+.asc-meter-head b { color: #d9c9ff; font-size: 8px; }
+.asc-bar { height: 13px; border: 2px solid #3a2350; background: #060410; }
+.asc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #7a4fb5, #c9a7ff, #ffe88a); box-shadow: 0 0 12px rgba(201,167,255,0.5); transition: width 0.4s steps(10, end); }
+.asc-meter-foot { color: var(--muted); font-size: 14px; line-height: 1.1; margin-top: 6px; }
+.asc-desc { color: #b9a9d6; font-size: 16px; line-height: 1.08; margin: 0; }
+.asc-desc b { color: #e6d4ff; }
+.asc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.asc-stat { border: 1px solid #3a2350; background: #100a1c; padding: 7px 5px; text-align: center; }
+.asc-stat span { display: block; font-family: var(--font-display); font-size: 6px; color: #9c86c4; line-height: 1.9; }
+.asc-stat b { display: block; font-family: var(--font-display); font-size: 9px; color: #d9c9ff; line-height: 1.6; }
+.asc-bonus { border: 1px dashed var(--gold); background: rgba(255,207,74,0.1); color: var(--gold); font-size: 15px; line-height: 1.1; padding: 6px 8px; text-align: center; }
+.modal .asc-warn { color: var(--red); font-size: 16px; }
+.ascension-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid #6a4aa0;
+  background: linear-gradient(90deg, rgba(201,167,255,0.16), rgba(201,167,255,0.04));
+  padding: 9px 11px;
+  margin-top: 12px;
+  position: relative;
+  box-shadow: 0 0 22px rgba(201,167,255,0.18);
+}
+.asc-callout-icon { font-size: 26px; color: #e6d4ff; text-shadow: 0 0 14px rgba(201,167,255,0.7); line-height: 1; }
+.asc-callout-copy { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; }
+.asc-callout-copy b { font-family: var(--font-display); font-size: 8px; color: #e6d4ff; }
+.asc-callout-copy span { color: #b9a9d6; font-size: 16px; line-height: 1.05; }
+
+/* Ascension win overlay */
+.ascension-win { border-color: #6a4aa0; background: radial-gradient(circle at 50% 25%, rgba(201,167,255,0.24), transparent 58%), linear-gradient(180deg, #1c1234, #0a0712); }
+.ascension-win h1 { color: #d9b8ff; text-shadow: 4px 4px 0 #2a0d45, 0 0 34px rgba(201,167,255,0.5); }
+.ascension-win.broken { border-color: var(--gold); background: radial-gradient(circle at 50% 25%, rgba(255,207,74,0.28), transparent 58%), linear-gradient(180deg, #241a08, #0a0712); }
+.ascension-win.broken h1 { color: var(--gold); text-shadow: 4px 4px 0 #5a3512, 0 0 40px rgba(255,207,74,0.6); }
+.asc-deltas { max-width: 460px; margin: 14px auto; border: 2px solid #3a2350; background: #100a1c; padding: 10px; }
+.asc-delta { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 5px 2px; border-top: 1px dashed #33224c; }
+.asc-delta:first-child { border-top: none; }
+.asc-delta span { font-family: var(--font-display); font-size: 6px; color: #9c86c4; text-align: left; }
+.asc-delta b { font-family: var(--font-display); font-size: 9px; color: #e6d4ff; }
+.asc-delta i { font-style: normal; color: var(--green); font-size: 15px; }
+.ascension-win .asc-meter { max-width: 460px; margin: 12px auto; }
+
+/* ------------------------------------------------------------
+   Progression guide — how you earn XP, tokens, stars and luck
+   ------------------------------------------------------------ */
+.progression-section { border: 2px solid #33586a; background: linear-gradient(180deg, rgba(93,232,255,0.08), transparent); padding: 12px; }
+.progression-section .section-head h2 { color: #9fe8ff; }
+.prog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.prog-item { border: 2px solid #23394a; background: #0b1119; padding: 9px; display: flex; flex-direction: column; gap: 5px; }
+.prog-item b { font-family: var(--font-display); font-size: 7px; letter-spacing: 0.5px; line-height: 1.4; }
+.prog-item span { color: #a9c2d6; font-size: 15px; line-height: 1.12; }
+.prog-item i { font-style: normal; font-family: var(--font-display); font-size: 7px; color: var(--muted); line-height: 1.5; }
+.prog-xp b { color: var(--cyan); }
+.prog-tokens b { color: var(--purple); }
+.prog-stars b { color: var(--gold); }
+.prog-luck b { color: #c9a7ff; }
+.prog-tier { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 9px; border-top: 1px dashed #23394a; padding-top: 9px; }
+.prog-tier-label { font-family: var(--font-display); font-size: 6px; color: var(--muted); }
+.prog-tier-name { font-family: var(--font-display); font-size: 9px; }
+.prog-tier-hint { color: #a9c2d6; font-size: 15px; line-height: 1.1; flex: 1 1 240px; }
 .vault-preview {
   height: 66px;
   display: flex;

@@ -115,11 +115,11 @@ function renderProfileChip() {
     <span class="pc-copy">
       <span class="pc-top"><b>LV ${prog.level}</b><span class="pc-tier" style="color:${tier.color}">${tier.name}</span></span>
       <span class="pc-bar"><i style="width:${Math.round(prog.pct * 100)}%"></i></span>
-      <span class="pc-bottom"><span class="pc-tokens">${tokensLabel(profile.tokens)}</span><span class="pc-stars">★ ${totalStars()}</span></span>
+      <span class="pc-bottom"><span class="pc-tokens">${tokensLabel(profile.tokens)}</span><span class="pc-stars">★ ${totalStars()}</span>${ascensionLuck() > 0 ? `<span class="pc-luck">✦ ${Math.round(ascensionLuck() * 100)}%</span>` : ""}</span>
     </span>`;
   chip.title = next
-    ? `${tier.name} • ${prog.into}/${prog.span} XP to LV ${prog.level + 1} • ${next.stars - totalStars()}★ to ${next.name}`
-    : `${tier.name} • top tier reached`;
+    ? `${tier.name} • ${prog.into}/${prog.span} XP to LV ${prog.level + 1} • ${next.stars - totalStars()}★ to ${next.name}${ascensionLuck() > 0 ? ` • ✦ ${Math.round(ascensionLuck() * 100)}% luck` : ""}`
+    : `${tier.name} • top tier reached${ascensionLuck() > 0 ? ` • ✦ ${Math.round(ascensionLuck() * 100)}% luck` : ""}`;
   chip.setAttribute("aria-label", `Profile level ${prog.level}, ${profile.tokens} tokens`);
 }
 
@@ -436,12 +436,18 @@ function renderLobby() {
         <button class="btn btn-cyan" data-action="go-vault">THE VAULT</button>
         <button class="btn btn-purple" data-action="go-backroom">BACK ROOM</button>
       </div>
+      ${ascensionReady() ? `<div class="ascension-callout">
+        <span class="asc-callout-icon">✦</span>
+        <div class="asc-callout-copy"><b>ASCENSION READY</b><span>You hold ★ ${totalStars()}. Trade them for permanent luck in the Vault.</span></div>
+        <button class="btn btn-purple btn-sm" data-action="go-vault">GO TO VAULT</button>
+      </div>` : ""}
       <div class="hero-chips">
         <span class="hero-chip">NEXT BILL <b>${next ? fmt(next.amount) : "$0"}</b></span>
         <span class="hero-chip ${due.length ? "warn" : ""}">DUE IN <b>${dueText}</b></span>
         <span class="hero-chip">WIN RATE <b>${rate}%</b></span>
         <span class="hero-chip">TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
         <span class="hero-chip">STARS <b>${state.prestige.stars || 0}</b></span>
+        ${ascensionLuck() > 0 ? `<span class="hero-chip luck">LUCK <b>✦ ${Math.round(ascensionLuck() * 100)}%</b></span>` : ""}
       </div>
     </section>
 
@@ -619,6 +625,86 @@ function starMarketCard(item) {
   </div>`;
 }
 
+function renderAscensionPanel() {
+  const luck = ascensionLuck();
+  const pct = Math.round((luck / ASCEND_LUCK_MAX) * 100);
+  const stars = totalStars();
+  const ready = ascensionReady();
+  const gain = ascensionLuckGain();
+  const over = ascensionOverStars();
+  const count = ascensionCount();
+
+  if (houseBroken()) {
+    return `<section class="vault-section ascension-section broken">
+      <div class="section-head"><h2>THE HOUSE IS BROKEN</h2><span>You won everything</span></div>
+      <div class="ascension-body">
+        <div class="asc-meter">
+          <div class="asc-meter-head"><span>PERMANENT LUCK</span><b>✦ 100%</b></div>
+          <div class="asc-bar"><i style="width:100%"></i></div>
+        </div>
+        <p class="asc-desc">You ascended <b>${count}</b> time${count === 1 ? "" : "s"} and bent the floor to your will. Every cabinet pays because it has no choice. There is nothing left to take.</p>
+      </div>
+    </section>`;
+  }
+
+  const overBonus = Math.floor(over / ASCEND_OVER_STEP) * ASCEND_OVER_BONUS;
+  return `<section class="vault-section ascension-section">
+    <div class="section-head"><h2>THE ASCENSION</h2><span>Ascensions: ${count} • Luck ✦ ${pct}%</span></div>
+    <div class="ascension-body">
+      <div class="asc-meter">
+        <div class="asc-meter-head"><span>PERMANENT LUCK</span><b>✦ ${pct}% / 100%</b></div>
+        <div class="asc-bar"><i style="width:${pct}%"></i></div>
+      </div>
+      <p class="asc-desc">At <b>★ ${ASCEND_MIN_STARS} (LEGEND)</b> you may ascend: sacrifice <b>every star and Star Market favor</b> for permanent Luck. Luck sharpens the odds on every cabinet and fattens every payout, forever — and each ascension stacks higher.</p>
+      <div class="asc-stats">
+        <div class="asc-stat"><span>STARS</span><b>★ ${stars} / ${ASCEND_MIN_STARS}</b></div>
+        <div class="asc-stat"><span>LUCK NOW</span><b>✦ ${(luck * 100).toFixed(0)}%</b></div>
+        <div class="asc-stat"><span>ON ASCEND</span><b>+✦ ${(gain * 100).toFixed(1)}%</b></div>
+      </div>
+      ${overBonus > 0 ? `<div class="asc-bonus">OVER-CLIMB BONUS +✦ ${(overBonus * 100).toFixed(1)}% — for ${over} star${over === 1 ? "" : "s"} past LEGEND.</div>` : ""}
+      <button class="btn btn-purple btn-lg btn-block" data-action="ascend" ${ready ? "" : "disabled"}>${ready ? `ASCEND — GAIN ✦ ${(gain * 100).toFixed(1)}% LUCK` : `LOCKED — REACH ★ ${ASCEND_MIN_STARS}`}</button>
+    </div>
+  </section>`;
+}
+
+function renderProgressionPanel() {
+  const stars = totalStars();
+  const tier = tierFor(stars);
+  const next = nextTierFor(stars);
+  const prog = levelProgress();
+  const toNext = next ? `★ ${next.stars - stars} to ${next.name}` : "top tier reached";
+  return `<section class="vault-section progression-section">
+    <div class="section-head"><h2>HOW YOU PROGRESS</h2><span>Four things to chase</span></div>
+    <div class="prog-grid">
+      <div class="prog-item prog-xp">
+        <b>XP → LEVEL</b>
+        <span>Play any cabinet — win or lose. Also: finish contracts, hit a new tier, pay the Tithe, or ascend. Every level pays ◆ tokens.</span>
+        <i>LV ${prog.level} • ${prog.into}/${prog.span} XP</i>
+      </div>
+      <div class="prog-item prog-tokens">
+        <b>◆ TOKENS</b>
+        <span>From level-ups, achievements, tier rewards, run contracts and ascensions. Spend them below on themes, skins, dice, cards and perks.</span>
+        <i>${tokensLabel(profile.tokens)} banked</i>
+      </div>
+      <div class="prog-item prog-stars">
+        <b>★ STARS</b>
+        <span>Earned ONLY in the Back Room — cash out Russian roulette — and by paying the Tithe (+${TITHE_REWARD.stars}★). Cash alone never gives stars.</span>
+        <i>★ ${stars} • ${toNext}</i>
+      </div>
+      <div class="prog-item prog-luck">
+        <b>✦ LUCK</b>
+        <span>At ★ ${ASCEND_MIN_STARS} (LEGEND) you may ascend, trading every star and Star Market favor for permanent Luck. It stacks forever.</span>
+        <i>✦ ${Math.round(ascensionLuck() * 100)}% permanent</i>
+      </div>
+    </div>
+    <div class="prog-tier">
+      <span class="prog-tier-label">YOUR TIER</span>
+      <b class="prog-tier-name" style="color:${tier.color}">${tier.name}</b>
+      <span class="prog-tier-hint">Your tier comes from lifetime ★ stars, not from cash. Tiers pay bonus energy, payouts and starting cash.</span>
+    </div>
+  </section>`;
+}
+
 function renderVault() {
   if (!profile) return `<div class="screen narrow"><p>Profile unavailable.</p></div>`;
   const prog = levelProgress();
@@ -649,6 +735,8 @@ function renderVault() {
       </div>
     </div>
     <p class="vault-note">Tokens are permanent. Earn them by leveling up, completing run contracts, cashing out prestige stars, and unlocking achievements. Everything here carries between runs.</p>
+    ${renderProgressionPanel()}
+    ${renderAscensionPanel()}
     <section class="vault-section star-market-section">
       <div class="section-head"><h2>STAR MARKET</h2><span>Spend ★ ${starBalance()} of ${totalStars()} — favors never expire</span></div>
       <div class="vault-grid perks">${STAR_MARKET.map(starMarketCard).join("")}</div>
@@ -788,6 +876,7 @@ function renderBackroom() {
       <div class="bp-item"><span>MAX ENERGY</span><b>+${power.energy}</b></div>
       <div class="bp-item"><span>PAYOUTS</span><b>+${Math.round(power.payout * 100)}%</b></div>
       <div class="bp-item"><span>START CASH</span><b>${fmt(power.startCash)}</b></div>
+      <div class="bp-item"><span>LUCK</span><b>✦ ${Math.round((power.luck || 0) * 100)}%</b></div>
     </div>
     <div class="backroom-content">
       <div class="gun-stage" id="gunStage">
@@ -964,11 +1053,15 @@ function showHelp() {
       <div class="help-item"><b>SIDE HUSTLE</b>Once per day, burn 1 energy for a small payout.</div>
       <div class="help-item"><b>SLEEP</b>Restores energy and advances the day. A new bill arrives.</div>
       <div class="help-item"><b>BANKRUPT</b>Hit zero cash and the run is over. Start a new one.</div>
-      <div class="help-item"><b>PRESTIGE</b>Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to unlock the back room and permanent stars.</div>
+      <div class="help-item"><b>XP & LEVELS</b>Every game earns XP, win or lose. Contracts, new tiers, the Tithe and ascensions add more. Each level pays ◆ tokens.</div>
+      <div class="help-item"><b>TOKENS ◆</b>From level-ups, achievements, tier rewards, contracts and ascensions. Spend them in the Vault.</div>
+      <div class="help-item"><b>STARS ★</b>Earned ONLY by cashing out Russian roulette in the back room, and by paying the Tithe. Cash alone never gives stars.</div>
+      <div class="help-item"><b>PRESTIGE</b>Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to unlock the back room. Stars are permanent and set your tier.</div>
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay it to end the run in a win.</div>
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that bend payouts, energy and debt. Read them in the right rail.</div>
       <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
       <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
+      <div class="help-item"><b>ASCENSION</b>At ★ ${ASCEND_MIN_STARS} (LEGEND), sacrifice every star and favor for permanent Luck — better odds and payouts forever.</div>
       <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
       <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
       <div class="help-item"><b>SETTINGS</b>Use the ⚙ button up top for volume, save codes and reset.</div>
@@ -988,9 +1081,12 @@ function showIntro() {
       <div class="help-item"><b>THE SHARKS</b>A new bill lands every morning and comes due in five days. Pay it before you sleep past the due day, or the run ends.</div>
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that change payouts, energy and debt. No two runs play the same.</div>
       <div class="help-item"><b>THE BACK ROOM</b>Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to unlock Russian roulette and permanent stars.</div>
+      <div class="help-item"><b>XP & LEVELS</b>Every game earns XP, win or lose. Contracts, tiers, the Tithe and ascensions add more. Each level pays ◆ tokens.</div>
+      <div class="help-item"><b>STARS ★</b>Only the back room cash-out and the Tithe grant stars. Cash alone never does — and your stars set your tier.</div>
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay the Shark to walk away a winner.</div>
       <div class="help-item"><b>THE VAULT</b>Level up and bank tokens to unlock themes, skins, dice, cards and permanent perks.</div>
       <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
+      <div class="help-item"><b>THE ASCENSION</b>At ★ ${ASCEND_MIN_STARS}, trade everything for permanent Luck until you break the house.</div>
       <div class="help-item"><b>CONTRACTS</b>Every run draws three random contracts. Complete them for tokens and XP.</div>
       <div class="help-item"><b>THE LEDGER</b>Stars, tokens, achievements and every unlock carry into your next run.</div>
     </div>
@@ -1448,6 +1544,102 @@ function restartRun() {
   renderAll();
   startMusic();
   toast("New run. Fresh cash. Same sharks.", "gold");
+}
+
+function showAscendConfirm() {
+  if (typeof ascensionReady !== "function" || !ascensionReady()) {
+    toast(`Reach ★ ${ASCEND_MIN_STARS} (LEGEND) to ascend.`, "bad");
+    sfx("error");
+    return;
+  }
+  const gain = ascensionLuckGain();
+  const favors = Object.keys(profile.starUpgrades || {}).length;
+  openModal(`<h2>ASCEND?</h2>
+    <p>This ritual sacrifices <b>all ★ ${totalStars()} stars</b>${favors ? ` and <b>${favors} Star Market favor${favors === 1 ? "" : "s"}</b>` : ""}.</p>
+    <p>In return you gain <b>+✦ ${(gain * 100).toFixed(1)}% permanent Luck</b> — better odds and bigger payouts on every cabinet, for every run from now on.</p>
+    <p class="asc-warn">This cannot be undone. Your tokens, perks and unlocks are untouched.</p>
+    <div class="modal-actions">
+      <button class="btn btn-purple" data-action="confirm-ascend">ASCEND</button>
+      <button class="btn btn-dark" data-action="close-modal">NOT YET</button>
+    </div>`);
+}
+
+function doAscend() {
+  if (ui.busy || ui.sleeping) return;
+  if (typeof ascensionReady !== "function" || !ascensionReady()) {
+    toast(`Reach ★ ${ASCEND_MIN_STARS} (LEGEND) to ascend.`, "bad");
+    sfx("error");
+    return;
+  }
+  const res = ascend();
+  if (!res) return;
+  closeModal();
+
+  // The stars are gone — begin a fresh run at zero stars.
+  const runs = (state.prestige.runs || 0) + 1;
+  const stats = { ...state.stats };
+  const sound = state.sound;
+  const music = state.music;
+  state = makeState({ stars: 0, runs, stats, sound, music });
+  if (typeof syncStars === "function") syncStars();
+  resetUI();
+  lastCashShown = null;
+  saveState();
+  renderAll();
+  showAscensionWin(res);
+}
+
+function showAscensionWin(res) {
+  const layer = $("#gameoverLayer");
+  if (!layer) return;
+  ui.busy = false;
+  ui.sleeping = false;
+  stopMusic();
+  const pct = Math.round(ascensionProgress() * 100);
+  const count = ascensionCount();
+  layer.hidden = false;
+
+  if (res.broke) {
+    layer.innerHTML = `<div class="prestige-win-card ascension-win broken">
+      <div class="big-star">✦</div>
+      <div class="gameover-kicker">ASCENSION ${count} // LUCK MAXED</div>
+      <h1>THE HOUSE BREAKS</h1>
+      <p>Luck <b>✦ 100%</b>. The wheel stops where you tell it. The dealer deals your cards. The odds stopped being odds a long time ago.</p>
+      <p><b>You have won everything.</b> The Ledger is closed. The sharks work for you now.</p>
+      <div class="asc-meter">
+        <div class="asc-meter-head"><span>PERMANENT LUCK</span><b>✦ 100%</b></div>
+        <div class="asc-bar"><i style="width:100%"></i></div>
+      </div>
+      <div class="gameover-meta">
+        <span>ASCENSIONS <b>${count}</b></span>
+        <span>TOKENS <b>${tokensLabel(profile.tokens)}</b></span>
+        <span>LEVEL <b>${profile.level || 1}</b></span>
+      </div>
+      <button class="btn btn-gold btn-lg" data-action="restart-run">START A VICTORY LAP</button>
+    </div>`;
+    sfx("jackpot");
+    return;
+  }
+
+  layer.innerHTML = `<div class="prestige-win-card ascension-win">
+    <div class="big-star">✦</div>
+    <div class="gameover-kicker">ASCENSION ${count} // THE HOUSE BLINKS</div>
+    <h1>YOU ASCENDED</h1>
+    <p>You gave up <b>★ ${res.sacrificed}</b> stars and every favor you owned. In return the floor leans your way, permanently.</p>
+    <div class="asc-deltas">
+      <div class="asc-delta"><span>LUCK</span><b>✦ ${Math.round(res.before * 100)}% → ✦ ${Math.round(res.after * 100)}%</b><i>+${(res.gain * 100).toFixed(1)}%</i></div>
+      <div class="asc-delta"><span>ASCENSIONS</span><b>${count}</b><i>+1</i></div>
+      <div class="asc-delta"><span>TOKENS</span><b>${tokensLabel(profile.tokens)}</b><i>+${res.tokens} ◆</i></div>
+    </div>
+    <div class="asc-meter">
+      <div class="asc-meter-head"><span>PERMANENT LUCK</span><b>✦ ${pct}% / 100%</b></div>
+      <div class="asc-bar"><i style="width:${pct}%"></i></div>
+      <div class="asc-meter-foot">${100 - pct}% more luck until the house breaks.</div>
+    </div>
+    <p class="asc-desc">Luck now boosts win odds on the coin, dice and slots — and adds straight to every payout.</p>
+    <button class="btn btn-purple btn-lg" data-action="restart-run">START NEXT RUN — LUCK ✦ ${Math.round(res.after * 100)}%</button>
+  </div>`;
+  sfx("prestige");
 }
 
 function showPrestigeWin(earned) {

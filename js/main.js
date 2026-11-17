@@ -46,7 +46,9 @@ const ACTIONS = {
   "buy-unlock": el => buyUnlock(el.dataset.kind, el.dataset.id),
   "equip-item": el => equipItem(el.dataset.kind, el.dataset.id),
   "buy-perk": el => buyPerk(el.dataset.perk),
-  "buy-star": el => buyStarUpgrade(el.dataset.id)
+  "buy-star": el => buyStarUpgrade(el.dataset.id),
+  "ascend": () => showAscendConfirm(),
+  "confirm-ascend": () => doAscend()
 };
 
 function onDocumentClick(event) {

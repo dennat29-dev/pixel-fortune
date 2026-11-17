@@ -106,7 +106,8 @@ function permanentPower(stars = 0) {
     stars: n,
     energy: starEnergyBonus(n) + tierEnergyBonus(n) + marketEnergy,
     payout: starPayoutBonus(n) + tierPayoutBonus(n) + marketPayout,
-    startCash: starStartCash(n) + perkLevel("headStart") * 100 + starMarketCash()
+    startCash: starStartCash(n) + perkLevel("headStart") * 100 + starMarketCash(),
+    luck: (typeof ascensionLuck === "function") ? ascensionLuck() : 0
   };
 }
 
@@ -126,8 +127,9 @@ function payoutBonus(s = state) {
   const stars = s.prestige?.stars || 0;
   const perkBonus = perkLevel("goldPlate") * 0.03;
   const marketBonus = (typeof hasStarUpgrade === "function" && hasStarUpgrade("goldenTouch")) ? 0.05 : 0;
+  const luck = (typeof ascensionLuck === "function") ? ascensionLuck() : 0;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("payout", s) : 0;
-  return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + marketBonus + perkBonus + modBonus);
+  return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + marketBonus + perkBonus + luck + modBonus);
 }
 
 /* Payout multiplier for one cabinet, including temporary floor effects. */
@@ -150,9 +152,10 @@ function luckBonus(s = state) {
   const upgrade = (s.upgradeLevels?.luck || 0) * 0.015;
   const perk = perkLevel("luckyCharm") * 0.012;
   const market = (typeof hasStarUpgrade === "function" && hasStarUpgrade("fourLeaf")) ? 0.03 : 0;
+  const ascension = (typeof ascensionLuck === "function") ? ascensionLuck() : 0;
   const effect = (typeof effectLuckPct === "function") ? effectLuckPct(s) : 0;
   const modLuck = (typeof runModTotal === "function") ? runModTotal("luck", s) : 0;
-  return upgrade + perk + market + effect + modLuck;
+  return upgrade + perk + market + ascension + effect + modLuck;
 }
 
 function debtModifier(s = state) {
