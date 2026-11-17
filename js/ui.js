@@ -655,7 +655,7 @@ function renderAscensionPanel() {
         <div class="asc-meter-head"><span>PERMANENT LUCK</span><b>✦ ${pct}% / 100%</b></div>
         <div class="asc-bar"><i style="width:${pct}%"></i></div>
       </div>
-      <p class="asc-desc">At <b>★ ${ASCEND_MIN_STARS} (LEGEND)</b> you may ascend: sacrifice <b>every star and Star Market favor</b> for permanent Luck. Luck sharpens the odds on every cabinet and fattens every payout, forever — and each ascension stacks higher.</p>
+      <p class="asc-desc">At <b>★ ${ASCEND_MIN_STARS} (LEGEND)</b> you may ascend: sacrifice <b>every star</b> for permanent Luck — your Star Market favors stay yours. Luck sharpens the odds on every cabinet and fattens every payout, forever, and each ascension stacks higher.</p>
       <div class="asc-stats">
         <div class="asc-stat"><span>STARS</span><b>★ ${stars} / ${ASCEND_MIN_STARS}</b></div>
         <div class="asc-stat"><span>LUCK NOW</span><b>✦ ${(luck * 100).toFixed(0)}%</b></div>
@@ -693,7 +693,7 @@ function renderProgressionPanel() {
       </div>
       <div class="prog-item prog-luck">
         <b>✦ LUCK</b>
-        <span>At ★ ${ASCEND_MIN_STARS} (LEGEND) you may ascend, trading every star and Star Market favor for permanent Luck. It stacks forever.</span>
+        <span>At ★ ${ASCEND_MIN_STARS} (LEGEND) you may ascend, trading every star for permanent Luck. Your Star Market favors stay. It stacks forever.</span>
         <i>✦ ${Math.round(ascensionLuck() * 100)}% permanent</i>
       </div>
     </div>
@@ -853,7 +853,10 @@ function renderBackroom() {
   }
 
   const r = state.russian;
-  const chancePct = r.remaining > 0 ? Math.round(100 / r.remaining) : 100;
+  const safety = (typeof rouletteSafety === "function") ? rouletteSafety() : 0;
+  const baseRisk = r.remaining > 0 ? 1 / r.remaining : 1;
+  const basePct = Math.round(baseRisk * 100);
+  const chancePct = Math.round(baseRisk * (1 - safety) * 100);
   const lastChamber = r.remaining <= 1;
   const chambers = Array.from({ length: chamberCount }, (_, i) => `<span class="chamber ${i < r.pulled ? "spent" : ""}" style="--i:${i}"></span>`).join("");
   const bars = Array.from({ length: chamberCount }, (_, i) => `<span class="risk-bar ${i < r.pulled ? "spent" : i < r.pulled + r.remaining ? "live" : ""}"></span>`).join("");
@@ -891,11 +894,12 @@ function renderBackroom() {
         </div>
       </div>
       <div class="backroom-panel">
-        <div class="risk-title">ONE BULLET // SIX CHAMBERS</div>
+        <div class="risk-title">ONE BULLET // ${chamberCount === 6 ? "SIX" : "SEVEN"} CHAMBERS</div>
         <div class="risk-big">${lastChamber ? "LOADED" : `${chancePct}% RISK`}</div>
         <div class="risk-desc">${lastChamber
           ? "One chamber left. It is the bullet. Cash out while you still have a face."
           : `Every safe pull banks a permanent prestige star. Cash out to keep them. The bullet ends the run and takes the unpreserved seals with it.`}</div>
+        ${safety > 0 && !lastChamber ? `<div class="risk-safety">✦ SAFETY ${Math.round(safety * 100)}% — a fatal pull may jam. Risk ${basePct}% → ${chancePct}%.</div>` : ""}
         <div class="risk-bars">${bars}</div>
         ${r.earned > 0 ? `<div class="cashout-preview">
           <div class="cp-head">CASH OUT ${r.earned} SEAL${r.earned === 1 ? "" : "S"} FOR</div>
@@ -1061,7 +1065,7 @@ function showHelp() {
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that bend payouts, energy and debt. Read them in the right rail.</div>
       <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
       <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
-      <div class="help-item"><b>ASCENSION</b>At ★ ${ASCEND_MIN_STARS} (LEGEND), sacrifice every star and favor for permanent Luck — better odds and payouts forever.</div>
+      <div class="help-item"><b>ASCENSION</b>At ★ ${ASCEND_MIN_STARS} (LEGEND), sacrifice every star for permanent Luck — your Star Market favors stay. Better odds and payouts forever.</div>
       <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
       <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
       <div class="help-item"><b>SETTINGS</b>Use the ⚙ button up top for volume, save codes and reset.</div>
@@ -1555,9 +1559,9 @@ function showAscendConfirm() {
   const gain = ascensionLuckGain();
   const favors = Object.keys(profile.starUpgrades || {}).length;
   openModal(`<h2>ASCEND?</h2>
-    <p>This ritual sacrifices <b>all ★ ${totalStars()} stars</b>${favors ? ` and <b>${favors} Star Market favor${favors === 1 ? "" : "s"}</b>` : ""}.</p>
+    <p>This ritual sacrifices <b>all ★ ${totalStars()} stars</b>.</p>
     <p>In return you gain <b>+✦ ${(gain * 100).toFixed(1)}% permanent Luck</b> — better odds and bigger payouts on every cabinet, for every run from now on.</p>
-    <p class="asc-warn">This cannot be undone. Your tokens, perks and unlocks are untouched.</p>
+    <p class="asc-warn">Stars reset and cannot be recovered — but your tokens, perks, unlocks${favors ? ` and <b>${favors} Star Market favor${favors === 1 ? "" : "s"}</b>` : ""} all stay.</p>
     <div class="modal-actions">
       <button class="btn btn-purple" data-action="confirm-ascend">ASCEND</button>
       <button class="btn btn-dark" data-action="close-modal">NOT YET</button>
@@ -1625,7 +1629,7 @@ function showAscensionWin(res) {
     <div class="big-star">✦</div>
     <div class="gameover-kicker">ASCENSION ${count} // THE HOUSE BLINKS</div>
     <h1>YOU ASCENDED</h1>
-    <p>You gave up <b>★ ${res.sacrificed}</b> stars and every favor you owned. In return the floor leans your way, permanently.</p>
+    <p>You gave up <b>★ ${res.sacrificed}</b> stars. Your Star Market favors stay yours. In return the floor leans your way, permanently.</p>
     <div class="asc-deltas">
       <div class="asc-delta"><span>LUCK</span><b>✦ ${Math.round(res.before * 100)}% → ✦ ${Math.round(res.after * 100)}%</b><i>+${(res.gain * 100).toFixed(1)}%</i></div>
       <div class="asc-delta"><span>ASCENSIONS</span><b>${count}</b><i>+1</i></div>
@@ -1720,8 +1724,11 @@ async function russianPull() {
   sfx("revolver");
   await wait(REDUCED_MOTION ? 300 : 1150);
 
-  const dead = Math.random() < 1 / state.russian.remaining;
-  if (dead) {
+  const baseRisk = 1 / state.russian.remaining;
+  const safety = (typeof rouletteSafety === "function") ? rouletteSafety() : 0;
+  const rolled = Math.random() < baseRisk;
+  const jammed = rolled && safety > 0 && Math.random() < safety;
+  if (rolled && !jammed) {
     flashScreen();
     sfx("bang");
     const stage = $(".gun-stage");
@@ -1738,13 +1745,18 @@ async function russianPull() {
   state.russian.earned += 1;
   state.russian.pulled += 1;
   if (typeof metaOnRussian === "function") metaOnRussian(state.russian.earned);
-  addLog(`Click. Empty chamber. ${state.russian.earned} seal${state.russian.earned === 1 ? "" : "s"} pending.`, "gold");
+  if (jammed) {
+    addLog("Click — the round jammed. The bullet never fired.", "gold");
+  } else {
+    addLog(`Click. Empty chamber. ${state.russian.earned} seal${state.russian.earned === 1 ? "" : "s"} pending.`, "gold");
+  }
   sfx("empty");
   saveState();
   ui.busy = false;
   renderAll();
+  if (jammed) toast("CLICK. The round jammed — you live.", "gold");
   if (state.russian.remaining <= 1) toast("One chamber left. It is loaded. Cash out now.", "bad");
-  else toast(`Click. ${state.russian.earned} seal${state.russian.earned === 1 ? "" : "s"} pending.`, "gold");
+  else if (!jammed) toast(`Click. ${state.russian.earned} seal${state.russian.earned === 1 ? "" : "s"} pending.`, "gold");
 }
 
 function cashOutRussian() {

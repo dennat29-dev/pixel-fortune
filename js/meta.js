@@ -279,7 +279,7 @@ function ascend() {
   profile.ascensions = ascensionCount() + 1;
   profile.stars = 0;
   profile.starSpent = 0;
-  profile.starUpgrades = {};
+  // Star Market favors are permanent — they survive ascension.
   if (state.prestige) state.prestige.stars = 0;
 
   const tokens = 5 + profile.ascensions * 3;
@@ -455,6 +455,8 @@ const VAULT_KINDS = { theme: THEMES, skin: SKINS, dice: DICE_DESIGNS, cards: CAR
 const STAR_MARKET = [
   { id: "extraChamber", name: "SEVENTH CHAMBER", icon: "revolver", cost: 6,
     desc: "The revolver holds seven chambers instead of six — better odds at the back-room table." },
+  { id: "steadyHand", name: "STEADY HAND", icon: "revolver", cost: 10,
+    desc: "The bullet jams: 35% chance to survive a fatal pull in the back room." },
   { id: "coldCash", name: "COLD HARD CASH", icon: "cash", cost: 4,
     desc: "Begin every run with an extra $400." },
   { id: "bigLungs", name: "BIG LUNGS", icon: "bolt", cost: 5,
@@ -503,6 +505,14 @@ function buyStarUpgrade(id) {
 
 function russianChambers() {
   return 6 + (hasStarUpgrade("extraChamber") ? 1 : 0);
+}
+
+/* How often a fatal pull jams instead of firing. Comes from the
+   STEADY HAND favor plus half your permanent ascension Luck. */
+function rouletteSafety() {
+  let safety = hasStarUpgrade("steadyHand") ? 0.35 : 0;
+  if (typeof ascensionLuck === "function") safety += ascensionLuck() * 0.5;
+  return clamp(safety, 0, 0.8);
 }
 
 function vaultList(kind) {

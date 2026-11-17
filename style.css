@@ -1773,6 +1773,7 @@ button:focus-visible, [tabindex]:focus-visible {
 .risk-title { font-family: var(--font-display); font-size: 8px; color: var(--red); line-height: 1.7; margin-bottom: 6px; }
 .risk-big { font-family: var(--font-display); font-size: 24px; color: #ffdfe6; text-shadow: 3px 3px 0 #3f0a16; line-height: 1.4; }
 .risk-desc { color: #9f8290; font-size: 18px; line-height: 1.05; margin: 7px 0 12px; }
+.risk-safety { border: 1px dashed #6a4aa0; background: rgba(201,167,255,0.1); color: #d9c9ff; font-family: var(--font-display); font-size: 7px; line-height: 1.7; padding: 7px 9px; margin: 0 0 12px; }
 .risk-bars { display: flex; gap: 4px; margin: 9px 0 13px; }
 .risk-bar { height: 11px; flex: 1; background: #2b111c; border: 1px solid #542030; }
 .risk-bar.live { background: var(--red); border-color: #ff8ca3; box-shadow: 0 0 8px rgba(255,85,118,0.45); }
