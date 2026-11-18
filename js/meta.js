@@ -104,7 +104,14 @@ function loadProfile() {
   merged.unlocks = { ...base.unlocks, ...(p.unlocks || {}) };
   merged.equipped = { ...base.equipped, ...(p.equipped || {}) };
   merged.perks = { ...base.perks, ...(p.perks || {}) };
-  merged.starUpgrades = { ...base.starUpgrades, ...(p.starUpgrades || {}) };
+  const rawUpgrades = { ...base.starUpgrades, ...(p.starUpgrades || {}) };
+  merged.starUpgrades = {};
+  Object.keys(rawUpgrades).forEach(id => {
+    const item = starMarketItem(id);
+    if (!item) return;
+    const lvl = rawUpgrades[id] === true ? 1 : Math.max(0, Math.floor(Number(rawUpgrades[id]) || 0));
+    if (lvl > 0) merged.starUpgrades[id] = Math.min(lvl, item.costs.length);
+  });
   merged.starSpent = Math.max(0, Math.floor(Number(p.starSpent) || 0));
   merged.luck = clamp(Number(p.luck) || 0, 0, ASCEND_LUCK_MAX);
   merged.ascensions = Math.max(0, Math.floor(Number(p.ascensions) || 0));
@@ -453,32 +460,58 @@ const VAULT_KINDS = { theme: THEMES, skin: SKINS, dice: DICE_DESIGNS, cards: CAR
    never go down when you buy something.
    ------------------------------------------------------------ */
 const STAR_MARKET = [
-  { id: "extraChamber", name: "SEVENTH CHAMBER", icon: "revolver", cost: 6,
-    desc: "The revolver holds seven chambers instead of six — better odds at the back-room table." },
-  { id: "steadyHand", name: "STEADY HAND", icon: "revolver", cost: 10,
-    desc: "The bullet jams: 35% chance to survive a fatal pull in the back room." },
-  { id: "starMagnet", name: "STAR MAGNET", icon: "star", cost: 15,
-    desc: "Every survived pull in the back room banks 2 prestige stars instead of 1." },
-  { id: "coldCash", name: "COLD HARD CASH", icon: "cash", cost: 4,
-    desc: "Begin every run with an extra $400." },
-  { id: "bigLungs", name: "BIG LUNGS", icon: "bolt", cost: 5,
-    desc: "Permanent +8 max energy, every run." },
-  { id: "goldenTouch", name: "GOLDEN TOUCH", icon: "coin", cost: 7,
-    desc: "Permanent +5% payouts." },
-  { id: "fourLeaf", name: "FOUR-LEAF", icon: "clover", cost: 6,
-    desc: "Permanent +3% win odds on coin, dice and roulette." },
-  { id: "debtForgiven", name: "FIRST ONE FREE", icon: "shark", cost: 5,
-    desc: "The first bill of every run is wiped from the ledger." },
-  { id: "doubleShift", name: "DOUBLE SHIFT", icon: "coin", cost: 5,
-    desc: "The side hustle pays double and can be worked twice a day." },
-  { id: "secondChance", name: "SECOND CHANCE", icon: "star", cost: 12,
-    desc: "Once per run, survive going broke — you wake up with $300 and a story." }
+  { id: "extraChamber", name: "SPARE CHAMBERS", icon: "revolver", costs: [6, 14],
+    desc: "Each level adds a chamber to the back-room revolver — one bullet, better odds.",
+    effect: l => `${6 + l} chambers` },
+  { id: "steadyHand", name: "STEADY HAND", icon: "revolver", costs: [10, 18, 26],
+    desc: "The bullet jams instead of firing. Each level raises your chance to survive a fatal pull.",
+    effect: l => l <= 0 ? "No jam chance" : `${Math.round([0, 0.35, 0.5, 0.6][l] * 100)}% jam chance` },
+  { id: "starMagnet", name: "STAR MAGNET", icon: "star", costs: [15, 25],
+    desc: "Every survived pull in the back room banks more prestige stars.",
+    effect: l => l <= 0 ? "1★ per pull" : `${1 + l}★ per pull` },
+  { id: "coldCash", name: "COLD HARD CASH", icon: "cash", costs: [4, 8, 12],
+    desc: "Begin every run with more cash in your pocket.",
+    effect: l => l <= 0 ? "No bonus" : `+${fmt(l * 400)} start cash` },
+  { id: "bigLungs", name: "BIG LUNGS", icon: "bolt", costs: [5, 10, 15],
+    desc: "Permanent max energy, every run.",
+    effect: l => l <= 0 ? "No bonus" : `+${l * 8} max energy` },
+  { id: "goldenTouch", name: "GOLDEN TOUCH", icon: "coin", costs: [7, 12, 17],
+    desc: "Permanent payout bonus on every cabinet.",
+    effect: l => l <= 0 ? "No bonus" : `+${l * 5}% payouts` },
+  { id: "fourLeaf", name: "FOUR-LEAF", icon: "clover", costs: [6, 11, 16],
+    desc: "Permanent win odds on coin, dice and roulette.",
+    effect: l => l <= 0 ? "No bonus" : `+${l * 3}% win odds` },
+  { id: "debtForgiven", name: "FIRST ONE FREE", icon: "shark", costs: [5, 10, 15],
+    desc: "Wipe the first bills of every run from the ledger.",
+    effect: l => l <= 0 ? "No bills wiped" : `${l} bill${l === 1 ? "" : "s"} wiped per run` },
+  { id: "doubleShift", name: "DOUBLE SHIFT", icon: "coin", costs: [5, 12],
+    desc: "The side hustle pays more and can be worked more times a day.",
+    effect: l => l <= 0 ? "One shift, normal pay" : `${l + 1}× pay, ${l + 1} shifts/day` },
+  { id: "secondChance", name: "SECOND CHANCE", icon: "star", costs: [12, 22],
+    desc: "Survive going broke — you wake up with $300 and a story.",
+    effect: l => l <= 0 ? "No rescue" : `${l} rescue${l === 1 ? "" : "s"} per run` }
 ];
 
 function starMarketItem(id) { return STAR_MARKET.find(i => i.id === id) || null; }
 
+/* Star favors are levelled: profile.starUpgrades[id] stores the current
+   level. Older saves stored `true`, which reads as level 1. */
+function starUpgradeLevel(id) {
+  if (!profile || !profile.starUpgrades) return 0;
+  const value = profile.starUpgrades[id];
+  if (value === true) return 1;
+  const n = Math.floor(Number(value) || 0);
+  return n > 0 ? n : 0;
+}
+
 function hasStarUpgrade(id) {
-  return !!(profile && profile.starUpgrades && profile.starUpgrades[id]);
+  return starUpgradeLevel(id) > 0;
+}
+
+/* Cost of the next level, or null when the favor is maxed. */
+function starUpgradeCost(item) {
+  const level = starUpgradeLevel(item.id);
+  return level >= item.costs.length ? null : item.costs[level];
 }
 
 function starBalance() {
@@ -488,38 +521,42 @@ function starBalance() {
 function buyStarUpgrade(id) {
   const item = starMarketItem(id);
   if (!profile || !item) return false;
-  if (hasStarUpgrade(id)) { toast("You already own that favor.", "info"); return false; }
-  if (starBalance() < item.cost) {
-    toast(`Need ★ ${item.cost} — you have ★ ${starBalance()}.`, "bad");
+  const level = starUpgradeLevel(id);
+  if (level >= item.costs.length) { toast("That favor is fully upgraded.", "info"); return false; }
+  const cost = item.costs[level];
+  if (starBalance() < cost) {
+    toast(`Need ★ ${cost} — you have ★ ${starBalance()}.`, "bad");
     sfx("error");
     return false;
   }
-  profile.starSpent = (profile.starSpent || 0) + item.cost;
+  profile.starSpent = (profile.starSpent || 0) + cost;
   profile.starUpgrades = profile.starUpgrades || {};
-  profile.starUpgrades[id] = true;
+  profile.starUpgrades[id] = level + 1;
   saveProfile();
-  addLog(`Bought a star favor: ${item.name}.`, "gold");
+  addLog(`Star favor upgraded: ${item.name} → LV ${level + 1}.`, "gold");
   sfx("prestige");
-  toast(`STAR FAVOR — ${item.name}`, "purple");
+  toast(`${item.name} — LV ${level + 1}`, "purple");
   renderAll();
   return true;
 }
 
 function russianChambers() {
-  return 6 + (hasStarUpgrade("extraChamber") ? 1 : 0);
+  return 6 + starUpgradeLevel("extraChamber");
 }
 
 /* How often a fatal pull jams instead of firing. Comes from the
    STEADY HAND favor plus half your permanent ascension Luck. */
+const STEADY_HAND_SAFETY = [0, 0.35, 0.5, 0.6];
 function rouletteSafety() {
-  let safety = hasStarUpgrade("steadyHand") ? 0.35 : 0;
+  const lvl = Math.min(starUpgradeLevel("steadyHand"), STEADY_HAND_SAFETY.length - 1);
+  let safety = STEADY_HAND_SAFETY[lvl];
   if (typeof ascensionLuck === "function") safety += ascensionLuck() * 0.5;
   return clamp(safety, 0, 0.8);
 }
 
-/* Stars banked per survived pull — doubled by the STAR MAGNET favor. */
+/* Stars banked per survived pull — raised by the STAR MAGNET favor. */
 function russianStarValue() {
-  return hasStarUpgrade("starMagnet") ? 2 : 1;
+  return 1 + starUpgradeLevel("starMagnet");
 }
 
 function vaultList(kind) {
@@ -912,7 +949,7 @@ const EVENTS = [
   {
     id: "shark_audit", name: "SHARK AUDIT", icon: "shark", weight: 8,
     text: "The sharks found an old receipt. You owe again.",
-    apply: s => { const note = issueDebtFor(s, s.day, true); return `Extra bill: ${fmt(note.amount)} due Day ${note.dueDay}.`; }
+    apply: s => { const note = issueDebtFor(s, s.day, true); return note ? `Extra bill: ${fmt(note.amount)} due Day ${note.dueDay}.` : "FIRST ONE FREE — the extra bill was wiped from the ledger."; }
   },
   {
     id: "charity", name: "DEBT RELIEF", icon: "clover", weight: 6,

@@ -201,20 +201,21 @@ function renderRightRail() {
   </div>`;
 
   const range = hustleRange();
-  const doubleShift = (typeof hasStarUpgrade === "function") && hasStarUpgrade("doubleShift");
-  const maxShifts = doubleShift ? 2 : 1;
+  const dsLevel = (typeof starUpgradeLevel === "function") ? starUpgradeLevel("doubleShift") : 0;
+  const shiftMult = dsLevel > 0 ? dsLevel + 1 : 1;
+  const maxShifts = shiftMult;
   const shiftsToday = state.sideHustleDay === state.day ? (state.sideHustleUses || 0) : 0;
   const shiftsLeft = Math.max(0, maxShifts - shiftsToday);
   const used = shiftsLeft <= 0;
   const hustleReady = !used && state.energy >= 1 && !ui.busy && !ui.sleeping && !state.gameOver;
-  const hustleMin = doubleShift ? range.min * 2 : range.min;
-  const hustleMax = doubleShift ? range.max * 2 : range.max;
+  const hustleMin = range.min * shiftMult;
+  const hustleMax = range.max * shiftMult;
   hustlePanel.innerHTML = `<div class="panel hustle-panel">
     <div class="panel-head"><b>SIDE HUSTLE</b><span class="tag">${shiftsLeft} / ${maxShifts} TODAY</span></div>
-    <p>Scrub the floor, bus tables, dodge the pit boss. Costs 1 energy.${doubleShift ? " DOUBLE SHIFT pays double." : ""}</p>
+    <p>Scrub the floor, bus tables, dodge the pit boss. Costs 1 energy.${dsLevel > 0 ? ` DOUBLE SHIFT pays ${shiftMult}×.` : ""}</p>
     <div class="hustle-pay"><span>PAYS</span><b>${fmt(hustleMin)}–${fmt(hustleMax)}</b></div>
     <button class="btn btn-green btn-block btn-sm" data-action="hustle" ${hustleReady ? "" : "disabled"}>${used ? "DONE FOR TODAY" : "WORK THE FLOOR"}</button>
-    <div class="sleep-hint">${used ? "The pit boss is watching. Come back tomorrow." : state.energy < 1 ? "No energy left. Sleep first." : doubleShift ? "Two honest shifts per day." : "One honest shift per day."}</div>
+    <div class="sleep-hint">${used ? "The pit boss is watching. Come back tomorrow." : state.energy < 1 ? "No energy left. Sleep first." : dsLevel > 0 ? `Up to ${shiftMult} shifts per day.` : "One honest shift per day."}</div>
   </div>`;
 
   const full = state.energy >= maxEnergy();
@@ -534,7 +535,7 @@ function renderShop() {
       <div class="shop-balance">BANKROLL<b>${fmt(state.cash)}</b></div>
     </div>
     <div class="shop-grid">${cards}</div>
-    <div class="shop-note"><b>PRESTIGE:</b> Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to open the back room. Every permanent star adds max energy, payouts and start cash to future runs, and the bonuses never stop growing. New prestige tiers pay a token bonus and lift the floor for good, and stars can be spent in the STAR MARKET at the Vault.</div>
+    <div class="shop-note"><b>PRESTIGE:</b> Bank ${fmt(PRESTIGE_GOAL)} cash — no deadline — to open the back room. Every permanent star adds max energy, payouts and start cash to future runs, and the bonuses never stop growing. New prestige tiers pay a token bonus and lift the floor for good, and stars can be spent in the STAR MARKET at the Vault — each favor upgrades level by level.</div>
     <div class="shop-actions">
       <button class="btn btn-dark" data-action="go-lobby">← BACK TO FLOOR</button>
       <span>Upgrades last for this run only. Stars are forever.</span>
@@ -612,16 +613,22 @@ function perkCard(key, perk) {
 }
 
 function starMarketCard(item) {
-  const owned = (typeof hasStarUpgrade === "function") && hasStarUpgrade(item.id);
+  const level = (typeof starUpgradeLevel === "function") ? starUpgradeLevel(item.id) : 0;
+  const max = item.costs.length;
+  const maxed = level >= max;
+  const cost = maxed ? null : item.costs[level];
   const balance = (typeof starBalance === "function") ? starBalance() : 0;
-  const affordable = balance >= item.cost;
-  return `<div class="vault-card star-card ${owned ? "owned" : ""}">
+  const affordable = cost !== null && balance >= cost;
+  const pips = Array.from({ length: max }, (_, i) => `<span class="level-pip ${i < level ? "on" : ""}"></span>`).join("");
+  return `<div class="vault-card star-card ${level > 0 ? "owned" : ""} ${maxed ? "maxed" : ""}">
     <div class="vault-preview"><span class="perk-icon">${sprite(item.icon)}</span></div>
-    <div class="vault-name">${item.name}</div>
+    <div class="vault-name">${item.name} <span class="muted">LV ${level}/${max}</span></div>
     <div class="vault-desc">${item.desc}</div>
-    <div class="vault-action">${owned
-      ? `<span class="vault-state on">OWNED</span>`
-      : `<button class="btn btn-purple btn-sm" data-action="buy-star" data-id="${item.id}" ${affordable ? "" : "disabled"}>★ ${item.cost}</button>`}</div>
+    <div class="upgrade-effect">NOW: ${level > 0 ? item.effect(level) : "Not owned"}<br>NEXT: ${maxed ? "MAXED OUT" : item.effect(level + 1)}</div>
+    <div class="level-pips">${pips}</div>
+    <div class="vault-action">${maxed
+      ? `<span class="vault-state on">MAXED</span>`
+      : `<button class="btn btn-purple btn-sm" data-action="buy-star" data-id="${item.id}" ${affordable ? "" : "disabled"}>${level > 0 ? "UPGRADE" : "BUY"} — ★ ${cost}</button>`}</div>
   </div>`;
 }
 
@@ -738,7 +745,7 @@ function renderVault() {
     ${renderProgressionPanel()}
     ${renderAscensionPanel()}
     <section class="vault-section star-market-section">
-      <div class="section-head"><h2>STAR MARKET</h2><span>Spend ★ ${starBalance()} of ${totalStars()} — favors never expire</span></div>
+      <div class="section-head"><h2>STAR MARKET</h2><span>Spend ★ ${starBalance()} of ${totalStars()} — every favor levels up</span></div>
       <div class="vault-grid perks">${STAR_MARKET.map(starMarketCard).join("")}</div>
     </section>
     ${sections}
@@ -827,10 +834,11 @@ function renderTrophies() {
 function renderBackroom() {
   const unlocked = state.prestigeUnlocked;
   const chamberCount = (typeof russianChambers === "function") ? russianChambers() : 6;
+  const numWord = n => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][n] || String(n);
   const hero = `<div class="backroom-hero">
     <span class="eyebrow">STAFF ONLY // NO CAMERAS // NO WITNESSES</span>
     <h1>THE BACK ROOM</h1>
-    <p>They only open this door for high rollers. Inside: one revolver, ${chamberCount === 6 ? "six" : "seven"} chambers, one bullet, and a permanent kind of luck.</p>
+    <p>They only open this door for high rollers. Inside: one revolver, ${numWord(chamberCount)} chambers, one bullet, and a permanent kind of luck.</p>
   </div>`;
 
   if (!unlocked) {
@@ -889,12 +897,12 @@ function renderBackroom() {
           <div class="gun-grip"></div>
           <div class="gun-trigger"></div>
           <div class="gun-hammer"></div>
-          <div class="cylinder">${chambers}</div>
+          <div class="cylinder" style="--chambers:${chamberCount}">${chambers}</div>
           <div class="gun-muzzle-flash"></div>
         </div>
       </div>
       <div class="backroom-panel">
-        <div class="risk-title">ONE BULLET // ${chamberCount === 6 ? "SIX" : "SEVEN"} CHAMBERS</div>
+        <div class="risk-title">ONE BULLET // ${numWord(chamberCount).toUpperCase()} CHAMBERS</div>
         <div class="risk-big">${lastChamber ? "LOADED" : `${chancePct}% RISK`}</div>
         <div class="risk-desc">${lastChamber
           ? "One chamber left. It is the bullet. Cash out while you still have a face."
@@ -1055,7 +1063,7 @@ function showHelp() {
     <div class="help-grid">
       <div class="help-item"><b>ENERGY</b>Each play burns energy. Run dry and you must sleep.</div>
       <div class="help-item"><b>DEBT</b>Bills appear each new day. Pay one before you sleep past its due day, or the run ends.</div>
-      <div class="help-item"><b>SIDE HUSTLE</b>Once per day, burn 1 energy for a small payout.</div>
+      <div class="help-item"><b>SIDE HUSTLE</b>Burn 1 energy for a small payout. DOUBLE SHIFT pays more, more often.</div>
       <div class="help-item"><b>SLEEP</b>Restores energy and advances the day. A new bill arrives.</div>
       <div class="help-item"><b>BANKRUPT</b>Hit zero cash and the run is over. Start a new one.</div>
       <div class="help-item"><b>XP & LEVELS</b>Every game earns XP, win or lose. Contracts, new tiers, the Tithe and ascensions add more. Each level pays ◆ tokens.</div>
@@ -1065,7 +1073,7 @@ function showHelp() {
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay it to end the run in a win.</div>
       <div class="help-item"><b>HOUSE RULES</b>Every run draws random modifiers that bend payouts, energy and debt. Read them in the right rail.</div>
       <div class="help-item"><b>THE VAULT</b>Spend permanent tokens on themes, skins, dice, cards and perks.</div>
-      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
+      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors at the Vault — buy the same favor again to upgrade it, level by level.</div>
       <div class="help-item"><b>ASCENSION</b>At ★ ${ASCEND_MIN_STARS} (LEGEND), sacrifice every star for permanent Luck — your Star Market favors stay. Better odds and payouts forever.</div>
       <div class="help-item"><b>CONTRACTS</b>Each run draws three random objectives. Finish them for tokens.</div>
       <div class="help-item"><b>TROPHIES</b>Achievements and prestige tiers live in the trophy room.</div>
@@ -1090,7 +1098,7 @@ function showIntro() {
       <div class="help-item"><b>STARS ★</b>Only the back room cash-out and the Tithe grant stars. Cash alone never does — and your stars set your tier.</div>
       <div class="help-item"><b>THE TITHE</b>Reach ${fmt(TITHE_AMOUNT)} by Day ${TITHE_DAY} and pay the Shark to walk away a winner.</div>
       <div class="help-item"><b>THE VAULT</b>Level up and bank tokens to unlock themes, skins, dice, cards and permanent perks.</div>
-      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors, found at the Vault.</div>
+      <div class="help-item"><b>STAR MARKET</b>Spend prestige stars on permanent favors at the Vault — buy the same favor again to upgrade it, level by level.</div>
       <div class="help-item"><b>THE ASCENSION</b>At ★ ${ASCEND_MIN_STARS}, trade everything for permanent Luck until you break the house.</div>
       <div class="help-item"><b>CONTRACTS</b>Every run draws three random contracts. Complete them for tokens and XP.</div>
       <div class="help-item"><b>THE LEDGER</b>Stars, tokens, achievements and every unlock carry into your next run.</div>
@@ -1373,20 +1381,21 @@ function payAllDebts() {
 
 function doHustle() {
   if (ui.busy || ui.sleeping || state.gameOver) return;
-  const doubleShift = (typeof hasStarUpgrade === "function") && hasStarUpgrade("doubleShift");
-  const maxShifts = doubleShift ? 2 : 1;
+  const dsLevel = (typeof starUpgradeLevel === "function") ? starUpgradeLevel("doubleShift") : 0;
+  const shiftMult = dsLevel > 0 ? dsLevel + 1 : 1;
+  const maxShifts = shiftMult;
   if (state.sideHustleDay !== state.day) { state.sideHustleDay = state.day; state.sideHustleUses = 0; }
   if ((state.sideHustleUses || 0) >= maxShifts) { toast("You already worked today.", "bad"); return; }
   if (state.energy < 1) { toast("No energy left. Sleep first.", "bad"); sfx("error"); return; }
   const range = hustleRange();
-  const hustleMult = ((typeof effectHustleMult === "function") ? effectHustleMult() : 1) * (doubleShift ? 2 : 1);
+  const hustleMult = ((typeof effectHustleMult === "function") ? effectHustleMult() : 1) * shiftMult;
   const pay = Math.max(1, Math.round(randInt(range.min, range.max) * hustleMult));
   state.energy -= 1;
   state.sideHustleDay = state.day;
   state.sideHustleUses = (state.sideHustleUses || 0) + 1;
   state.cash += pay;
   state.stats.bestCash = Math.max(state.stats.bestCash, state.cash);
-  addLog(`Side hustle paid ${fmt(pay)}${hustleMult > 1 ? " (doubled)" : ""}.`, "win");
+  addLog(`Side hustle paid ${fmt(pay)}${shiftMult > 1 ? ` (×${shiftMult})` : ""}.`, "win");
   sfx("coin");
   floatCash(pay);
   toast(`Side hustle — ${signedMoney(pay)}`, "good");
@@ -1403,14 +1412,16 @@ function takeWager(bet, game) {
   state.bets[game.id] = Math.max(game.minBet, Math.round(bet));
 }
 
-/* SECOND CHANCE — a one-time rescue from bankruptcy, once per run. */
+/* SECOND CHANCE — a rescue from bankruptcy, usable once per level per run. */
 function trySecondChance() {
-  if (typeof hasStarUpgrade !== "function" || !hasStarUpgrade("secondChance")) return false;
-  if (state.secondChanceUsed) return false;
-  state.secondChanceUsed = true;
+  const maxUses = (typeof starUpgradeLevel === "function") ? starUpgradeLevel("secondChance") : 0;
+  if (maxUses <= 0) return false;
+  const used = state.secondChanceUsed || 0;
+  if (used >= maxUses) return false;
+  state.secondChanceUsed = used + 1;
   state.cash = Math.max(state.cash, 300);
   state.debts = state.debts.filter(note => note.dueDay >= state.day);
-  addLog("SECOND CHANCE — a stranger covered your tab. You woke up with $300.", "gold");
+  addLog(`SECOND CHANCE — a stranger covered your tab (${maxUses - state.secondChanceUsed} left). You woke up with $300.`, "gold");
   toast("SECOND CHANCE — broke, but breathing.", "purple");
   sfx("upgrade");
   saveState();

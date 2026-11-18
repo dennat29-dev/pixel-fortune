@@ -95,13 +95,13 @@ function tierPayoutBonus(stars = 0) {
 
 /* Everything a run starts with from permanent progress, in one place. */
 function starMarketCash() {
-  return (typeof hasStarUpgrade === "function" && hasStarUpgrade("coldCash")) ? 400 : 0;
+  return (typeof starUpgradeLevel === "function" ? starUpgradeLevel("coldCash") : 0) * 400;
 }
 
 function permanentPower(stars = 0) {
   const n = Math.max(0, Math.floor(stars || 0));
-  const marketEnergy = (typeof hasStarUpgrade === "function" && hasStarUpgrade("bigLungs")) ? 8 : 0;
-  const marketPayout = (typeof hasStarUpgrade === "function" && hasStarUpgrade("goldenTouch")) ? 0.05 : 0;
+  const marketEnergy = (typeof starUpgradeLevel === "function" ? starUpgradeLevel("bigLungs") : 0) * 8;
+  const marketPayout = (typeof starUpgradeLevel === "function" ? starUpgradeLevel("goldenTouch") : 0) * 0.05;
   return {
     stars: n,
     energy: starEnergyBonus(n) + tierEnergyBonus(n) + marketEnergy,
@@ -115,7 +115,7 @@ function maxEnergy(s = state) {
   if (!s) return BASE_ENERGY;
   const level = s.upgradeLevels?.energy || 0;
   const starBonus = starEnergyBonus(s.prestige?.stars || 0) + tierEnergyBonus(s.prestige?.stars || 0);
-  const marketBonus = (typeof hasStarUpgrade === "function" && hasStarUpgrade("bigLungs")) ? 8 : 0;
+  const marketBonus = (typeof starUpgradeLevel === "function" ? starUpgradeLevel("bigLungs") : 0) * 8;
   const perkBonus = perkLevel("warmBed") * 3;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("energy", s) : 0;
   return Math.max(1, BASE_ENERGY + level * 4 + starBonus + marketBonus + perkBonus + modBonus);
@@ -126,7 +126,7 @@ function payoutBonus(s = state) {
   const level = s.upgradeLevels?.payout || 0;
   const stars = s.prestige?.stars || 0;
   const perkBonus = perkLevel("goldPlate") * 0.03;
-  const marketBonus = (typeof hasStarUpgrade === "function" && hasStarUpgrade("goldenTouch")) ? 0.05 : 0;
+  const marketBonus = (typeof starUpgradeLevel === "function" ? starUpgradeLevel("goldenTouch") : 0) * 0.05;
   const luck = (typeof ascensionLuck === "function") ? ascensionLuck() : 0;
   const modBonus = (typeof runModTotal === "function") ? runModTotal("payout", s) : 0;
   return Math.max(0, 1 + level * 0.05 + starPayoutBonus(stars) + tierPayoutBonus(stars) + marketBonus + perkBonus + luck + modBonus);
@@ -151,7 +151,7 @@ function luckBonus(s = state) {
   if (!s) return 0;
   const upgrade = (s.upgradeLevels?.luck || 0) * 0.015;
   const perk = perkLevel("luckyCharm") * 0.012;
-  const market = (typeof hasStarUpgrade === "function" && hasStarUpgrade("fourLeaf")) ? 0.03 : 0;
+  const market = (typeof starUpgradeLevel === "function" ? starUpgradeLevel("fourLeaf") : 0) * 0.03;
   const ascension = (typeof ascensionLuck === "function") ? ascensionLuck() : 0;
   const effect = (typeof effectLuckPct === "function") ? effectLuckPct(s) : 0;
   const modLuck = (typeof runModTotal === "function") ? runModTotal("luck", s) : 0;
@@ -225,7 +225,8 @@ function makeState(options = {}) {
     debts: [],
     sideHustleDay: 0,
     sideHustleUses: 0,
-    secondChanceUsed: false,
+    secondChanceUsed: 0,
+    billsForgiven: 0,
     prestige: {
       stars,
       runs,
@@ -259,8 +260,11 @@ function makeState(options = {}) {
 }
 
 function issueDebtFor(s, day, silent = false) {
-  if (day <= 1 && s.debts.length === 0 && typeof hasStarUpgrade === "function" && hasStarUpgrade("debtForgiven")) {
-    if (!silent) addLogTo(s, "FIRST ONE FREE — the opening bill was wiped from the ledger.", "gold");
+  const freeBills = (typeof starUpgradeLevel === "function") ? starUpgradeLevel("debtForgiven") : 0;
+  const forgiven = s.billsForgiven || 0;
+  if (freeBills > 0 && forgiven < freeBills) {
+    s.billsForgiven = forgiven + 1;
+    if (!silent) addLogTo(s, `FIRST ONE FREE — a bill was wiped from the ledger. ${freeBills - s.billsForgiven} left this run.`, "gold");
     return null;
   }
   const base = 20 + day * 3 + randInt(0, 20);
@@ -326,7 +330,8 @@ function loadState() {
     s.energy = clamp(Math.floor(num(p.energy, s.energy)), 0, maxEnergy(s));
     s.sideHustleDay = Math.max(0, Math.floor(num(p.sideHustleDay, 0)));
     s.sideHustleUses = Math.max(0, Math.floor(num(p.sideHustleUses, 0)));
-    s.secondChanceUsed = !!p.secondChanceUsed;
+    s.secondChanceUsed = p.secondChanceUsed === true ? 1 : Math.max(0, Math.floor(num(p.secondChanceUsed, 0)));
+    s.billsForgiven = Math.max(0, Math.floor(num(p.billsForgiven, 0)));
     s.prestigeUnlocked = !!p.prestigeUnlocked;
     s.prestigeWin = Math.max(0, Math.floor(num(p.prestigeWin, 0)));
     s.titheWin = Math.max(0, Math.floor(num(p.titheWin, 0)));

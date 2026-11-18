@@ -1717,7 +1717,7 @@ button:focus-visible, [tabindex]:focus-visible {
   background: radial-gradient(circle at 42% 36%, #0a0a0e 0 35%, #020204 75%);
   border: 3px solid #4c5064;
   z-index: 2;
-  transform: rotate(calc(var(--i) * 60deg)) translateY(-48px);
+  transform: rotate(calc(var(--i) * (360deg / var(--chambers, 6)))) translateY(-48px);
   box-shadow: inset 0 3px 3px #000;
 }
 .chamber.spent { background: radial-gradient(circle at 42% 36%, #d7cbb4, #7a7161 70%); border-color: #9b927e; }
@@ -2411,6 +2411,10 @@ button:focus-visible, [tabindex]:focus-visible {
 .vault-card.star-card .vault-preview { border-color: #4a2f78; box-shadow: inset 0 0 18px rgba(120,60,200,0.28); }
 .vault-card.star-card .perk-icon { color: var(--purple); }
 .vault-card.star-card .vault-name { color: #d9c9ff; }
+.vault-card.star-card .upgrade-effect { color: #c9a7ff; }
+.vault-card.star-card .level-pip.on { background: var(--purple); border-color: #7a4fd0; box-shadow: 0 0 7px rgba(177,108,255,0.45); }
+.vault-card.star-card.maxed { border-color: var(--gold); box-shadow: inset 0 2px 0 #4a3a15, 0 3px 0 #03040a, 0 0 18px rgba(255,207,74,0.16); }
+.vault-card.star-card.maxed .vault-name { color: var(--gold); }
 
 /* ------------------------------------------------------------
    The Ascension — permanent luck
