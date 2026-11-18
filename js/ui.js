@@ -900,6 +900,7 @@ function renderBackroom() {
           ? "One chamber left. It is the bullet. Cash out while you still have a face."
           : `Every safe pull banks a permanent prestige star. Cash out to keep them. The bullet ends the run and takes the unpreserved seals with it.`}</div>
         ${safety > 0 && !lastChamber ? `<div class="risk-safety">✦ SAFETY ${Math.round(safety * 100)}% — a fatal pull may jam. Risk ${basePct}% → ${chancePct}%.</div>` : ""}
+        ${(typeof russianStarValue === "function" && russianStarValue() > 1) ? `<div class="risk-safety star-magnet">✦ STAR MAGNET — every survived pull banks ${russianStarValue()}★.</div>` : ""}
         <div class="risk-bars">${bars}</div>
         ${r.earned > 0 ? `<div class="cashout-preview">
           <div class="cp-head">CASH OUT ${r.earned} SEAL${r.earned === 1 ? "" : "S"} FOR</div>
@@ -1742,9 +1743,9 @@ async function russianPull() {
   }
 
   state.russian.remaining -= 1;
-  state.russian.earned += 1;
+  state.russian.earned += (typeof russianStarValue === "function" ? russianStarValue() : 1);
   state.russian.pulled += 1;
-  if (typeof metaOnRussian === "function") metaOnRussian(state.russian.earned);
+  if (typeof metaOnRussian === "function") metaOnRussian(state.russian.earned, state.russian.pulled);
   if (jammed) {
     addLog("Click — the round jammed. The bullet never fired.", "gold");
   } else {

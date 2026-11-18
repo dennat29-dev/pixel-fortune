@@ -380,10 +380,12 @@ function loadState() {
 
     if (p.russian && typeof p.russian === "object") {
       const chambers = (typeof russianChambers === "function") ? russianChambers() : 6;
-      const maxSeals = chambers - 1;
+      const sealValue = (typeof russianStarValue === "function") ? russianStarValue() : 1;
+      const maxPulls = chambers - 1;
+      const maxSeals = maxPulls * sealValue;
       s.russian.remaining = clamp(Math.floor(num(p.russian.remaining, chambers)), 1, chambers);
       s.russian.earned = clamp(Math.floor(num(p.russian.earned, 0)), 0, maxSeals);
-      s.russian.pulled = clamp(Math.floor(num(p.russian.pulled, 0)), 0, maxSeals);
+      s.russian.pulled = clamp(Math.floor(num(p.russian.pulled, 0)), 0, maxPulls);
     }
 
     s.runStats = (p.runStats && typeof p.runStats === "object")

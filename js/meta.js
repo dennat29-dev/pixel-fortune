@@ -457,6 +457,8 @@ const STAR_MARKET = [
     desc: "The revolver holds seven chambers instead of six — better odds at the back-room table." },
   { id: "steadyHand", name: "STEADY HAND", icon: "revolver", cost: 10,
     desc: "The bullet jams: 35% chance to survive a fatal pull in the back room." },
+  { id: "starMagnet", name: "STAR MAGNET", icon: "star", cost: 15,
+    desc: "Every survived pull in the back room banks 2 prestige stars instead of 1." },
   { id: "coldCash", name: "COLD HARD CASH", icon: "cash", cost: 4,
     desc: "Begin every run with an extra $400." },
   { id: "bigLungs", name: "BIG LUNGS", icon: "bolt", cost: 5,
@@ -513,6 +515,11 @@ function rouletteSafety() {
   let safety = hasStarUpgrade("steadyHand") ? 0.35 : 0;
   if (typeof ascensionLuck === "function") safety += ascensionLuck() * 0.5;
   return clamp(safety, 0, 0.8);
+}
+
+/* Stars banked per survived pull — doubled by the STAR MAGNET favor. */
+function russianStarValue() {
+  return hasStarUpgrade("starMagnet") ? 2 : 1;
 }
 
 function vaultList(kind) {
@@ -1028,7 +1035,7 @@ const ACHIEVEMENTS = [
   { id: "debt_slayer", name: "DEBT SLAYER", desc: "Pay 10 bills across all runs.", icon: "shark", reward: { tokens: 2, xp: 35 }, check: (s, p) => p.lifetime.billsPaid >= 10 },
   { id: "clean_ledger", name: "SPOTLESS", desc: "Clear your whole ledger 5 times.", icon: "clover", reward: { tokens: 3, xp: 45 }, check: (s, p) => p.lifetime.ledgersCleared >= 5 },
   { id: "nerve", name: "NERVE", desc: "Cash out with 3 or more seals.", icon: "revolver", reward: { tokens: 3, xp: 50 }, check: (s, p, ev) => ev.type === "prestige" && ev.earned >= 3 },
-  { id: "five_seals", name: "FIVE CHAMBERS", desc: "Pull five safe chambers in one visit.", icon: "revolver", reward: { tokens: 5, xp: 80 }, check: (s, p, ev) => ev.type === "russian" && ev.earned >= 5 },
+  { id: "five_seals", name: "FIVE CHAMBERS", desc: "Pull five safe chambers in one visit.", icon: "revolver", reward: { tokens: 5, xp: 80 }, check: (s, p, ev) => ev.type === "russian" && (ev.pulled || 0) >= 5 },
   { id: "prestige_1", name: "WALKED OUT", desc: "Cash out prestige for the first time.", icon: "star", reward: { tokens: 3, xp: 60 }, check: (s, p) => p.lifetime.prestiges >= 1 },
   { id: "prestige_10", name: "REGULAR", desc: "Cash out prestige ten times.", icon: "star", reward: { tokens: 6, xp: 110 }, check: (s, p) => p.lifetime.prestiges >= 10 },
   { id: "freedom", name: "FREEDOM", desc: "Pay the Shark's Tithe and walk away clean.", icon: "star", reward: { tokens: 4, xp: 60 }, check: (s, p, ev) => ev.type === "tithe" },
@@ -1175,9 +1182,9 @@ function metaOnSleep() {
   return null;
 }
 
-function metaOnRussian(earned) {
+function metaOnRussian(earned, pulled) {
   if (!profile) return;
-  checkAchievements({ type: "russian", earned });
+  checkAchievements({ type: "russian", earned, pulled });
   updateChallenges({ type: "russian", earned });
   saveProfile();
 }
