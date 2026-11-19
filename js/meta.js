@@ -248,6 +248,13 @@ function houseBroken() {
   return !!(profile && profile.houseBroken);
 }
 
+/* Once the house is broken, the run can no longer be lost: every cabinet
+   pays out, the back-room revolver never fires, and the sharks can't end you.
+   The odds stopped being odds a long time ago. */
+function cannotLose() {
+  return houseBroken();
+}
+
 function ascensionReady() {
   return !!profile && !houseBroken() && totalStars() >= ASCEND_MIN_STARS;
 }

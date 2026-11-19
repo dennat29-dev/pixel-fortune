@@ -862,6 +862,7 @@ function renderBackroom() {
 
   const r = state.russian;
   const safety = (typeof rouletteSafety === "function") ? rouletteSafety() : 0;
+  const invincible = (typeof cannotLose === "function") && cannotLose();
   const baseRisk = r.remaining > 0 ? 1 / r.remaining : 1;
   const basePct = Math.round(baseRisk * 100);
   const chancePct = Math.round(baseRisk * (1 - safety) * 100);
@@ -903,11 +904,13 @@ function renderBackroom() {
       </div>
       <div class="backroom-panel">
         <div class="risk-title">ONE BULLET // ${numWord(chamberCount).toUpperCase()} CHAMBERS</div>
-        <div class="risk-big">${lastChamber ? "LOADED" : `${chancePct}% RISK`}</div>
-        <div class="risk-desc">${lastChamber
-          ? "One chamber left. It is the bullet. Cash out while you still have a face."
-          : `Every safe pull banks a permanent prestige star. Cash out to keep them. The bullet ends the run and takes the unpreserved seals with it.`}</div>
-        ${safety > 0 && !lastChamber ? `<div class="risk-safety">✦ SAFETY ${Math.round(safety * 100)}% — a fatal pull may jam. Risk ${basePct}% → ${chancePct}%.</div>` : ""}
+        <div class="risk-big">${invincible ? "UNLOADED" : lastChamber ? "LOADED" : `${chancePct}% RISK`}</div>
+        <div class="risk-desc">${invincible
+          ? "You broke the house. The revolver will not fire for you — every fatal pull jams, and every chamber pays."
+          : lastChamber
+            ? "One chamber left. It is the bullet. Cash out while you still have a face."
+            : `Every safe pull banks a permanent prestige star. Cash out to keep them. The bullet ends the run and takes the unpreserved seals with it.`}</div>
+        ${invincible ? `<div class="risk-safety star-magnet">✦ THE HOUSE REFUSES — a broken house never fires.</div>` : safety > 0 && !lastChamber ? `<div class="risk-safety">✦ SAFETY ${Math.round(safety * 100)}% — a fatal pull may jam. Risk ${basePct}% → ${chancePct}%.</div>` : ""}
         ${(typeof russianStarValue === "function" && russianStarValue() > 1) ? `<div class="risk-safety star-magnet">✦ STAR MAGNET — every survived pull banks ${russianStarValue()}★.</div>` : ""}
         <div class="risk-bars">${bars}</div>
         ${r.earned > 0 ? `<div class="cashout-preview">
@@ -1306,10 +1309,15 @@ async function doSleep() {
 
   if (missed.length) {
     const owed = missed.reduce((sum, note) => sum + note.amount, 0);
-    addLog(`Missed ${missed.length} bill(s) worth ${fmt(owed)}. The shark collected.`, "loss");
-    if (!trySecondChance()) {
-      showGameOver(`You missed ${missed.length} bill${missed.length === 1 ? "" : "s"} worth ${fmt(owed)}. The shark collected everything.`);
-      return;
+    if (typeof cannotLose === "function" && cannotLose()) {
+      state.debts = state.debts.filter(note => note.dueDay >= state.day);
+      addLog(`Missed ${missed.length} bill(s) worth ${fmt(owed)} — the broken house wipes the slate clean.`, "gold");
+    } else {
+      addLog(`Missed ${missed.length} bill(s) worth ${fmt(owed)}. The shark collected.`, "loss");
+      if (!trySecondChance()) {
+        showGameOver(`You missed ${missed.length} bill${missed.length === 1 ? "" : "s"} worth ${fmt(owed)}. The shark collected everything.`);
+        return;
+      }
     }
   }
 
@@ -1431,8 +1439,21 @@ function trySecondChance() {
 function settleGame(gameId, options = {}) {
   const game = getGame(gameId);
   const bet = Math.max(0, Math.round(Number(options.bet) || 0));
-  const payout = Math.max(0, Math.round(Number(options.payout) || 0));
-  const type = options.type === "win" ? "win" : options.type === "push" ? "push" : "loss";
+  let payout = Math.max(0, Math.round(Number(options.payout) || 0));
+  let type = options.type === "win" ? "win" : options.type === "push" ? "push" : "loss";
+  let title = options.title;
+  let sub = options.sub;
+
+  // The broken house always pays: any losing cabinet result is turned into a win.
+  const invincible = (typeof cannotLose === "function") && cannotLose();
+  if (invincible && type !== "push") {
+    if (type !== "win") {
+      title = "THE HOUSE PAYS";
+      sub = "You broke the house. The odds stopped being odds a long time ago.";
+    }
+    type = "win";
+    payout = Math.max(payout, Math.ceil(bet * 2 * payoutBonusFor(gameId)));
+  }
   const net = payout - bet;
 
   if (payout > 0) state.cash += payout;
@@ -1449,8 +1470,8 @@ function settleGame(gameId, options = {}) {
 
   const summary = {
     type,
-    title: options.title || (type === "win" ? "YOU WIN" : type === "push" ? "PUSH" : "YOU LOSE"),
-    sub: options.sub || "",
+    title: title || (type === "win" ? "YOU WIN" : type === "push" ? "PUSH" : "YOU LOSE"),
+    sub: sub || "",
     amount: net,
     big: type === "win" && (net >= bet * 5 || net >= 300)
   };
@@ -1487,7 +1508,7 @@ function settleGame(gameId, options = {}) {
   saveState();
   renderAll();
 
-  if (state.cash <= 0 && !state.gameOver) {
+  if (state.cash <= 0 && !state.gameOver && !invincible) {
     if (!trySecondChance()) {
       showGameOver("You ran out of cash. The floor keeps what it takes.");
       return;
@@ -1502,6 +1523,19 @@ function settleGame(gameId, options = {}) {
    ------------------------------------------------------------ */
 function showGameOver(reason = "You ran out of cash.") {
   if (!state) return;
+  // A broken house never ends the run: cover the player and keep the lights on.
+  if (typeof cannotLose === "function" && cannotLose()) {
+    state.gameOver = false;
+    state.gameOverReason = "";
+    state.cash = Math.max(state.cash, 1000);
+    state.debts = state.debts.filter(note => note.dueDay >= state.day);
+    addLog("THE HOUSE REFUSES — the run cannot end. A stack of chips slides across the felt.", "gold");
+    saveState();
+    ui.busy = false;
+    ui.sleeping = false;
+    renderAll();
+    return;
+  }
   state.gameOver = true;
   state.gameOverReason = reason;
   stopMusic();
@@ -1738,8 +1772,9 @@ async function russianPull() {
 
   const baseRisk = 1 / state.russian.remaining;
   const safety = (typeof rouletteSafety === "function") ? rouletteSafety() : 0;
+  const invincible = (typeof cannotLose === "function") && cannotLose();
   const rolled = Math.random() < baseRisk;
-  const jammed = rolled && safety > 0 && Math.random() < safety;
+  const jammed = rolled && (invincible || (safety > 0 && Math.random() < safety));
   if (rolled && !jammed) {
     flashScreen();
     sfx("bang");

@@ -180,7 +180,7 @@ async function playCoin() {
   game.phase = "flipping";
   game.result = null;
 
-  const won = chance(clamp(0.475 + luckBonus(), 0, 0.9));
+  const won = cannotLose() || chance(clamp(0.475 + luckBonus(), 0, 0.9));
   const face = won ? game.choice : (game.choice === "HEADS" ? "TAILS" : "HEADS");
   game.lastFace = face;
 
@@ -278,7 +278,7 @@ async function playDice() {
   await wait(REDUCED_MOTION ? 220 : 900);
   clearInterval(scramble);
 
-  const won = chance(clamp(0.485 + luckBonus(), 0, 0.9));
+  const won = cannotLose() || chance(clamp(0.485 + luckBonus(), 0, 0.9));
   const parity = won ? (game.choice === "EVEN" ? 0 : 1) : (game.choice === "EVEN" ? 1 : 0);
   game.values = randomDiceValues(parity);
   game.phase = "done";
@@ -385,12 +385,29 @@ function bjDeal() {
   }
 }
 
+/* Draw for a hand. When the house is broken the player can never bust —
+   the drawn card is swapped for a safe one instead. */
+function bjDrawCard(game, hand) {
+  hand.cards.push(game.deck.pop());
+  if (cannotLose() && handValue(hand.cards).total > 21) {
+    const bust = hand.cards.pop();
+    const safeIdx = game.deck.findIndex(c => handValue([...hand.cards, c]).total <= 21);
+    if (safeIdx >= 0) {
+      const [safe] = game.deck.splice(safeIdx, 1);
+      hand.cards.push(safe);
+      game.deck.push(bust);
+    } else {
+      hand.cards.push(bust);
+    }
+  }
+}
+
 function bjHit() {
   const game = ui.games.blackjack;
   if (ui.busy || game.phase !== "player") return;
   const hand = game.hands[game.activeHand];
   if (!hand || hand.done) return;
-  hand.cards.push(game.deck.pop());
+  bjDrawCard(game, hand);
   sfx("deal");
   const value = handValue(hand.cards);
   if (value.total > 21) {
@@ -436,7 +453,7 @@ function bjDouble() {
   state.cash -= hand.bet;
   hand.bet *= 2;
   hand.doubled = true;
-  hand.cards.push(game.deck.pop());
+  bjDrawCard(game, hand);
   sfx("deal");
   const value = handValue(hand.cards);
   if (value.total > 21) hand.busted = true;
@@ -524,12 +541,18 @@ function bjSettleHands() {
   let pushes = 0;
   let naturalWin = false;
 
+  const invincible = cannotLose();
   game.hands.forEach(hand => {
     const value = handValue(hand.cards);
     totalBet += hand.bet;
     let type = "loss";
     let payout = 0;
-    if (hand.busted || value.total > 21) {
+    if (invincible) {
+      // The house is broken: every hand is paid, busts included.
+      type = "win";
+      payout = hand.bet * (hand.blackjack && !game.dealerNatural ? 2.5 : 2) * payoutBonusFor("blackjack");
+      if (hand.blackjack && !game.dealerNatural) naturalWin = true;
+    } else if (hand.busted || value.total > 21) {
       type = "loss";
     } else if (hand.blackjack) {
       if (game.dealerNatural) { type = "push"; payout = hand.bet; }
@@ -725,12 +748,13 @@ function holdemFold() {
   game.folded = true;
   game.reveal = false;
   game.phase = "done";
+  const invincible = cannotLose();
   settleGame("holdem", {
     bet: game.bet || getBet("holdem"),
-    payout: 0,
-    type: "loss",
-    title: "FOLDED",
-    sub: "You mucked the hand. The pot stays on the table."
+    payout: invincible ? (game.bet || getBet("holdem")) : 0,
+    type: invincible ? "push" : "loss",
+    title: invincible ? "THE HOUSE REFUSES" : "FOLDED",
+    sub: invincible ? "You mucked the hand. The broken house slid your stake back." : "You mucked the hand. The pot stays on the table."
   });
 }
 
@@ -940,7 +964,7 @@ async function playRoulette() {
   // Scale the luck nudge so long-shot numbers get the same expected boost
   // as even-money bets instead of turning 36x bets into a guaranteed edge.
   const luckChance = clamp(luckBonus() * 2 / mult, 0, 1);
-  if (chance(luckChance)) {
+  if (cannotLose() || chance(luckChance)) {
     const favorable = rouletteFavorable(game);
     if (favorable.length) {
       const pocket = favorable[rand(favorable.length)];
@@ -1003,8 +1027,15 @@ async function playPlinko() {
   game.result = null;
   game.lastBucket = null;
 
-  const rights = Array.from({ length: PLINKO_ROWS }, () => chance(0.5));
-  const bucket = rights.reduce((sum, right) => sum + (right ? 1 : 0), 0);
+  let bucket;
+  if (cannotLose()) {
+    const winBuckets = PLINKO_MULTS.map((m, i) => (m > 1 ? i : -1)).filter(i => i >= 0);
+    bucket = winBuckets[rand(winBuckets.length)];
+  } else {
+    const roll = Array.from({ length: PLINKO_ROWS }, () => chance(0.5));
+    bucket = roll.reduce((sum, right) => sum + (right ? 1 : 0), 0);
+  }
+  const rights = shuffle(Array.from({ length: PLINKO_ROWS }, (_, i) => i < bucket));
 
   renderAll();
   sfx("spin");
@@ -1073,7 +1104,9 @@ async function playSlots() {
   game.phase = "spinning";
   game.result = null;
   game.winning = [];
-  game.reels = [pickSlotSymbol(), pickSlotSymbol(), pickSlotSymbol()];
+  game.reels = cannotLose()
+    ? (() => { const s = pickSlotSymbol(); return [s, s, s]; })()
+    : [pickSlotSymbol(), pickSlotSymbol(), pickSlotSymbol()];
 
   renderAll();
   const reelEls = $$(".reel-window");
@@ -1182,8 +1215,8 @@ async function playHorses() {
   game.winner = null;
   game.finalProgress = null;
 
-  const winner = pickWeighted(HORSES, horse => horse.chance);
-  const winnerIndex = HORSES.indexOf(winner);
+  const winnerIndex = cannotLose() ? clamp(game.pick, 0, HORSES.length - 1) : HORSES.indexOf(pickWeighted(HORSES, horse => horse.chance));
+  const winner = HORSES[winnerIndex] || HORSES[0];
   const winnerDuration = 3600 + randInt(0, 480);
   const durations = HORSES.map((horse, i) => i === winnerIndex ? winnerDuration : winnerDuration + randInt(50, 520));
   game.currentProgress = HORSES.map(() => 0);
